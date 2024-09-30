@@ -1,1 +1,4 @@
 venv/
+3rdparty/
+*.tar.gz
+*.tar.*
