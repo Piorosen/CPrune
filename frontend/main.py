@@ -15,7 +15,6 @@ import torchvision.models as models
 from c_pruner import CPruner
 from nni.compression.pytorch import ModelSpeedup
 from nni.compression.pytorch.utils.counter import count_flops_params
-#%%
 ############### TVM build part addition ##############
 import tvm 
 from tvm import relay, auto_scheduler
