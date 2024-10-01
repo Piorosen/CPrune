@@ -13,8 +13,8 @@ from models.cifar10.vgg import VGG
 from models.cifar10.resnet import ResNet18
 import torchvision.models as models
 from c_pruner import CPruner
-from nni.compression.pytorch import ModelSpeedup
-from nni.compression.pytorch.utils.counter import count_flops_params
+from nni.compression.speedup.model_speedup import ModelSpeedup
+from nni.compression.utils.counter import count_flops_params
 ############### TVM build part addition ##############
 import tvm 
 from tvm import relay, auto_scheduler
@@ -24,9 +24,9 @@ from tvm.autotvm.tuner import XGBTuner
 from tvm import rpc 
 from tvm.contrib import utils, ndk, graph_runtime as runtime
 from tvm.contrib import graph_executor
-from nni.compression.pytorch.utils.counter import count_flops_params
+from nni.compression.utils.counter import count_flops_params
 
-from nni.compression.pytorch import ModelSpeedup
+from nni.compression.speedup.model_speedup import ModelSpeedup
 from torch.optim.lr_scheduler import MultiStepLR
 ###########################################################
 
@@ -397,3 +397,5 @@ if __name__ == '__main__':
         os.makedirs(args.experiment_data_dir)
 
     main(args)
+
+# %%

@@ -21,5 +21,6 @@ RUN apt install -y lsb-release wget software-properties-common gnupg libzstd-dev
     wget https://apt.llvm.org/llvm.sh && \
     chmod +x llvm.sh && ./llvm.sh 17 all
 
+COPY setup.sh setup.sh 
 
 CMD ["/usr/sbin/sshd", "-D"]
