@@ -108,12 +108,12 @@ class CPruner(Pruner):
         """
         device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
         arch = "arm64"
-        target = "llvm -mtriple=%s-linux-android" % arch        
-        
-        device_key = "android"
+        # target = "llvm -mtriple=%s-linux-android" % arch        
+        target = "llvm -mtriple=%s-linux-none" % arch
+        device_key = os.getenv("ID_OPTIMIZATION_HARDWARE")
         log_file = "%s.log" % (device_key)
         dtype = "float32"
-        use_android = True
+        use_android = False
         self._model_to_prune.eval()
         _, _, temp_results = count_flops_params(self._model_to_prune, self._input_size)
         conv2d_num = 0

@@ -2,11 +2,13 @@ FROM python:3.12.6-bookworm
 
 WORKDIR /work
 
+RUN apt-get update
 RUN apt-get update && apt-get install -y openssh-server 
 RUN mkdir /var/run/sshd
 RUN echo 'root:root' | chpasswd
-RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-EXPOSE 22
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/^#Port 22$/Port 5911/' /etc/ssh/sshd_config
+EXPOSE 5911 
 
 # Install CMake 3.30
 RUN wget https://github.com/Kitware/CMake/releases/download/v3.30.4/cmake-3.30.4-linux-x86_64.tar.gz && \

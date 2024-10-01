@@ -1,5 +1,6 @@
 #!/bin/bash
 chown -R root:root /work
+
 git submodule init && git submodule update && \
    git submodule foreach git submodule update --init --recursive
 
@@ -25,3 +26,5 @@ echo 'export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH' >> ~/.bashrc && \
 echo 'export TVM_LIBRARY_PATH=$TVM_HOME/build' >> ~/.bashrc && source ~/.bashrc
 
 pip install -e /work/3rdparty/tvm/python
+pip install setuptools nni==3.0 pytest python-dotenv xgboost
+pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0

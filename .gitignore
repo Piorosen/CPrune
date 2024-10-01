@@ -1,3 +1,6 @@
+test/
+frontend/data_fast/
+
 venv/
 3rdparty/
 *.tar.gz
