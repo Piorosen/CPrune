@@ -213,8 +213,10 @@ class CPruner(Pruner):
         intermediate = 0
         pruning_times = [0.0 for i in range(conv2d_num)]
         real_pruning_times = [0.0 for i in range(conv2d_num)]
-        at_least_trials = 2
-        num_per_round = 2
+        at_least_trials = 0
+        num_per_round = 1
+        runner_number = 1 # 10
+        runner_repeat = 1  # 2
         tune_trials = (at_least_trials + num_per_round) * len(tasks) #(conv2d_num + others_num)        
         minimum_acc_requirement = self._acc_requirement
         
@@ -238,7 +240,7 @@ class CPruner(Pruner):
             tune_option = auto_scheduler.TuningOptions(
                 num_measure_trials=tune_trials,
                 builder=auto_scheduler.LocalBuilder(build_func="ndk" if use_android else "default"),
-                runner=auto_scheduler.RPCRunner(device_key, host=tracker_host, port=tracker_port, timeout=20, number=10, repeat=2,),
+                runner=auto_scheduler.RPCRunner(device_key, host=tracker_host, port=tracker_port, timeout=20, number=runner_number, repeat=runner_repeat,),
                 measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
 	            verbose=1,
                 #early_stopping=300,
@@ -469,7 +471,7 @@ class CPruner(Pruner):
                 tune_option = auto_scheduler.TuningOptions(
                     num_measure_trials=tune_trials,
                     builder=auto_scheduler.LocalBuilder(build_func="ndk" if use_android else "default"),
-                    runner=auto_scheduler.RPCRunner(device_key, host=tracker_host, port=tracker_port, timeout=20, number=10, repeat=2,),
+                    runner=auto_scheduler.RPCRunner(device_key, host=tracker_host, port=tracker_port, timeout=20, number=runner_number, repeat=runner_repeat,),
                     measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
                     num_measures_per_round = num_per_round,
                 )
@@ -490,11 +492,27 @@ class CPruner(Pruner):
                             lib = relay.build(mod, params=params, target="opencl -device=mali", target_host=target)
          
                 tmp = utils.tempdir()
-                lib_fname = tmp.relpath("net.so")
-                lib.export_library(lib_fname, ndk.create_shared)
-                remote = auto_scheduler.utils.request_remote(device_key, tracker_host, tracker_port, timeout=250)
-                remote.upload(lib_fname)
-                rlib = remote.load_module("net.so")
+                if use_android:
+                    lib_fname = tmp.relpath("net.so")
+                    lib.export_library(lib_fname, ndk.create_shared)
+                    remote = auto_scheduler.utils.request_remote(device_key, tracker_host, tracker_port, timeout=200)
+                    remote.upload(lib_fname)
+                    rlib = remote.load_module("net.so")
+                else:
+                    lib_fname = tmp.relpath("net.tar")
+                    lib.export_library(lib_fname)
+                    remote = auto_scheduler.utils.request_remote(device_key, tracker_host, tracker_port, timeout=200)
+                    remote.upload(lib_fname)
+                    rlib = remote.load_module("net.tar")
+
+                    rlib = remote.load_module("net.so")
+                else:
+                    lib_fname = tmp.relpath("net.tar")
+                    lib.export_library(lib_fname)
+                    remote = auto_scheduler.utils.request_remote(device_key, tracker_host, tracker_port, timeout=200)
+                    remote.upload(lib_fname)
+                    rlib = remote.load_module("net.tar")
+
                 if self._cpu_or_gpu == 1:
                     ctx = remote.cpu()
                 else:
