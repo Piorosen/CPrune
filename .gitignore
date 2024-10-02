@@ -1,5 +1,9 @@
+*.pth
+*.txt
+*.tsv
 test/
 frontend/data_fast/
+frontend/nni*/
 
 venv/
 *.tar.gz

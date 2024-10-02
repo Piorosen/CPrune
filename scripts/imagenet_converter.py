@@ -4,8 +4,8 @@ import os
 import shutil
 
 # validation 이미지 폴더 경로 및 매핑 파일 경로
-val_dir = './data_fast/imagenet/val'  # validation 이미지가 저장된 경로
-mapping_file = './data_fast/imagenet/ILSVRC2012_validation_ground_truth.txt'  # 클래스 매핑 파일
+val_dir = '/work/test/test'  # validation 이미지가 저장된 경로
+mapping_file = '/work/test/ILSVRC2012_validation_ground_truth.txt'  # 클래스 매핑 파일
 
 # 클래스 ID에 해당하는 폴더를 만들어서 이미지들을 옮김
 def reorganize_val_set(val_dir, mapping_file):

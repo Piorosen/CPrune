@@ -3,7 +3,6 @@
 from types import SimpleNamespace
 from dotenv import load_dotenv
 
-
 import argparse
 import os
 import json
@@ -18,8 +17,8 @@ from models.cifar10.vgg import VGG
 from models.cifar10.resnet import ResNet18
 import torchvision.models as models
 from c_pruner import CPruner
-from nni.compression.speedup.model_speedup import ModelSpeedup
-from nni.compression.utils.counter import count_flops_params
+from nni.compression.pytorch import ModelSpeedup
+from nni.compression.pytorch.utils.counter import count_flops_params
 ############### TVM build part addition ##############
 import tvm 
 from tvm import relay, auto_scheduler
@@ -29,12 +28,13 @@ from tvm.autotvm.tuner import XGBTuner
 from tvm import rpc 
 from tvm.contrib import utils, ndk, graph_runtime as runtime
 from tvm.contrib import graph_executor
-from nni.compression.utils.counter import count_flops_params
+from nni.compression.pytorch.utils.counter import count_flops_params
 
-from nni.compression.speedup.model_speedup import ModelSpeedup
+from nni.compression.pytorch import ModelSpeedup
 from torch.optim.lr_scheduler import MultiStepLR
 ###########################################################
 #%%
+
 def get_data(dataset, data_dir, batch_size, test_batch_size):
     kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {
     }
@@ -181,7 +181,7 @@ def get_input_size(dataset):
         input_size = (1, 3, 224, 224)
     return input_size
 
-#%%
+
 def main(args):
     cpu_or_gpu = 1 #1: cpu, 2: gpu
     # prepare dataset
@@ -277,7 +277,6 @@ def main(args):
     ################ Long-term tuning and compile ################
     if os.path.isfile('./model_fine_tuned.pth'):
         model.load_state_dict(torch.load(os.path.join(args.experiment_data_dir, 'model_fine_tuned.pth')))
-        
     arch = "arm64"
     # target = "llvm -mtriple=%s-linux-android" % arch
     target = "llvm -mtriple=%s-linux-none" % arch
@@ -288,7 +287,6 @@ def main(args):
     at_least_trials = 10
     num_per_round = 60
     model.eval()
-    
     _, _, temp_results = count_flops_params(model, get_input_size(args.dataset))
     input_shape = get_input_size(args.dataset)
     input_data = torch.randn(input_shape).to(device)
@@ -373,57 +371,54 @@ if __name__ == '__main__':
     )
     main(args)
 #%%
-#%%
-    
-    # def str2bool(s):
-    #     if isinstance(s, bool):
-    #         return s
-    #     if s.lower() in ('yes', 'true', 't', 'y', '1'):
-    #         return True
-    #     if s.lower() in ('no', 'false', 'f', 'n', '0'):
-    #         return False
-    #     raise argparse.ArgumentTypeError('Boolean value expected.')
 
-    # parser = argparse.ArgumentParser(description='CTuner arguments')
+    def str2bool(s):
+        if isinstance(s, bool):
+            return s
+        if s.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        if s.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
-    # # dataset and model
-    # parser.add_argument('--accuracy-requirement', type=float, default=0.85,
-    #                     help='the minimum accuracy requirement')
-    # parser.add_argument('--dataset', type=str, default= 'cifar10',
-    #                     help='dataset to use, cifar10 or imagenet')
-    # parser.add_argument('--data-dir', type=str, default='./data_fast/',
-    #                     help='dataset directory')
-    # parser.add_argument('--model', type=str, default='resnet18',
-    #                     help='model to use, resnet18, mobilenetv2, mnasnet1_0')
-    # parser.add_argument('--batch-size', type=int, default=64,
-    #                     help='input batch size for training (default: 64)')
-    # parser.add_argument('--test-batch-size', type=int, default=1, #64
-    #                     help='input batch size for testing (default: 64)')
-    # parser.add_argument('--fine-tune', type=str2bool, default=True,
-    #                     help='whether to fine-tune the pruned model')
-    # parser.add_argument('--fine-tune-epochs', type=int, default=20,
-    #                     help='epochs to fine tune')
-    # parser.add_argument('--experiment-data-dir', type=str, default='./',
-    #                     help='For saving experiment data')
+    parser = argparse.ArgumentParser(description='CTuner arguments')
 
-    # # pruner
-    # parser.add_argument('--base-algo', type=str, default='l1',
-    #                     help='base pruning algorithm. level, l1, l2, or fpgm')
-    # parser.add_argument('--sparsity', type=float, default=0.1,
-    #                     help='target overall target sparsity')
+    # dataset and model
+    parser.add_argument('--accuracy-requirement', type=float, default=0.85,
+                        help='the minimum accuracy requirement')
+    parser.add_argument('--dataset', type=str, default= 'imagenet',
+                        help='dataset to use, cifar10 or imagenet')
+    parser.add_argument('--data-dir', type=str, default='./data_fast/',
+                        help='dataset directory')
+    parser.add_argument('--model', type=str, default='resnet18',
+                        help='model to use, resnet18, mobilenetv2, mnasnet1_0')
+    parser.add_argument('--batch-size', type=int, default=64,
+                        help='input batch size for training (default: 64)')
+    parser.add_argument('--test-batch-size', type=int, default=1, #64
+                        help='input batch size for testing (default: 64)')
+    parser.add_argument('--fine-tune', type=str2bool, default=True,
+                        help='whether to fine-tune the pruned model')
+    parser.add_argument('--fine-tune-epochs', type=int, default=20,
+                        help='epochs to fine tune')
+    parser.add_argument('--experiment-data-dir', type=str, default='./',
+                        help='For saving experiment data')
 
-    # # others
-    # parser.add_argument('--log-interval', type=int, default=1000, #200,
-    #                     help='how many batches to wait before logging training status')
-    # # speed-up
-    # parser.add_argument('--speed-up', type=str2bool, default=True,
-    #                     help='Whether to speed-up the pruned model')
+    # pruner
+    parser.add_argument('--base-algo', type=str, default='l1',
+                        help='base pruning algorithm. level, l1, l2, or fpgm')
+    parser.add_argument('--sparsity', type=float, default=0.1,
+                        help='target overall target sparsity')
 
-    # args = parser.parse_args()
+    # others
+    parser.add_argument('--log-interval', type=int, default=1000, #200,
+                        help='how many batches to wait before logging training status')
+    # speed-up
+    parser.add_argument('--speed-up', type=str2bool, default=True,
+                        help='Whether to speed-up the pruned model')
 
-    # if not os.path.exists(args.experiment_data_dir):
-    #     os.makedirs(args.experiment_data_dir)
-    
-    # main(args)
+    args = parser.parse_args()
 
-# %%
+    if not os.path.exists(args.experiment_data_dir):
+        os.makedirs(args.experiment_data_dir)
+
+    main(args)

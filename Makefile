@@ -1,10 +1,10 @@
 .PHONY: build run
 
 build:
-	docker build -t chacha/cprune:3.12 .
+	docker build -t chacha/cprune:3.8 .
 
 run: 
-	sudo docker run --network host -d -v $(pwd):/work chacha/cprune:3.12
+	sudo docker run --network host -d -v $(shell pwd):/work chacha/cprune:3.8
 # bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 
 recover:

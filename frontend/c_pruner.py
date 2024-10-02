@@ -5,10 +5,10 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import copy
 import json
 import torch
-from options import PRUNER_DICT
-# from nni.algorithms.compression.pytorch.pruning.constants_pruner import PRUNER_DICT
 
-from nni.compression.base.compressor import Pruner
+from nni.compression.pytorch.compressor import Pruner
+from nni.algorithms.compression.pytorch.pruning.constants_pruner import PRUNER_DICT
+
 ################### TVM build part addition ###############
 from models.cifar10.resnet import ResNet18, ResNet50
 import torchvision.models as models
@@ -23,9 +23,9 @@ from tvm.autotvm.tuner import XGBTuner
 from tvm import rpc
 from tvm.contrib import utils, ndk, graph_runtime as runtime
 from tvm.contrib import graph_executor
-from nni.compression.utils.counter import count_flops_params
+from nni.compression.pytorch.utils.counter import count_flops_params
 
-from nni.compression.speedup.model_speedup import ModelSpeedup
+from nni.compression.pytorch import ModelSpeedup
 from torch.optim.lr_scheduler import MultiStepLR
 ###########################################################
 
@@ -497,14 +497,6 @@ class CPruner(Pruner):
                     lib.export_library(lib_fname, ndk.create_shared)
                     remote = auto_scheduler.utils.request_remote(device_key, tracker_host, tracker_port, timeout=200)
                     remote.upload(lib_fname)
-                    rlib = remote.load_module("net.so")
-                else:
-                    lib_fname = tmp.relpath("net.tar")
-                    lib.export_library(lib_fname)
-                    remote = auto_scheduler.utils.request_remote(device_key, tracker_host, tracker_port, timeout=200)
-                    remote.upload(lib_fname)
-                    rlib = remote.load_module("net.tar")
-
                     rlib = remote.load_module("net.so")
                 else:
                     lib_fname = tmp.relpath("net.tar")
