@@ -1,4 +1,5 @@
-FROM python:3.12.6-bookworm
+# FROM python:3.12.6-bookworm
+FROM python:3.8.17-buster
 
 WORKDIR /work
 
@@ -21,7 +22,7 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v3.30.4/cmake-3.30.4
 # Install LLVM 17
 RUN apt install -y lsb-release wget software-properties-common gnupg libzstd-dev libtinfo5 && \
     wget https://apt.llvm.org/llvm.sh && \
-    chmod +x llvm.sh && ./llvm.sh 17 all
+    chmod +x llvm.sh && ./llvm.sh 12 all
 
 COPY setup.sh setup.sh 
 
