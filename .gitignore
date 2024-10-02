@@ -2,7 +2,6 @@ test/
 frontend/data_fast/
 
 venv/
-3rdparty/
 *.tar.gz
 *.tar.*
 # Byte-compiled / optimized / DLL files
