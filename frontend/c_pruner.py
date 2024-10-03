@@ -204,7 +204,7 @@ class CPruner(Pruner):
                 subgraph_tasks[pos[pos_idx]] = idx
                 pos_idx += 1
 
-        max_iter = 100
+        max_iter = 3
         pass_target_latency = 0
         alpha = 0.995  # target_accuracy = alpha * prev_best_accuracy
         beta = 0.99  # target_latency = beta * current_best_latency
@@ -240,7 +240,7 @@ class CPruner(Pruner):
             tune_option = auto_scheduler.TuningOptions(
                 num_measure_trials=tune_trials,
                 builder=auto_scheduler.LocalBuilder(build_func="ndk" if use_android else "default"),
-                runner=auto_scheduler.RPCRunner(device_key, host=tracker_host, port=tracker_port, timeout=20, number=runner_number, repeat=runner_repeat,),
+                runner=auto_scheduler.RPCRunner(device_key, host=tracker_host, port=tracker_port, timeout=200, number=runner_number, repeat=runner_repeat,),
                 measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
 	            verbose=1,
                 #early_stopping=300,
@@ -471,7 +471,7 @@ class CPruner(Pruner):
                 tune_option = auto_scheduler.TuningOptions(
                     num_measure_trials=tune_trials,
                     builder=auto_scheduler.LocalBuilder(build_func="ndk" if use_android else "default"),
-                    runner=auto_scheduler.RPCRunner(device_key, host=tracker_host, port=tracker_port, timeout=20, number=runner_number, repeat=runner_repeat,),
+                    runner=auto_scheduler.RPCRunner(device_key, host=tracker_host, port=tracker_port, timeout=200, number=runner_number, repeat=runner_repeat,),
                     measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
                     num_measures_per_round = num_per_round,
                 )
