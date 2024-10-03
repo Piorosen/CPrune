@@ -284,8 +284,8 @@ def main(args):
     log_file = "%s.log" % (device_key)
     dtype = "float32"
     use_android = False
-    at_least_trials = 10
-    num_per_round = 60
+    at_least_trials = 1
+    num_per_round = 1
     model.eval()
     _, _, temp_results = count_flops_params(model, get_input_size(args.dataset))
     input_shape = get_input_size(args.dataset)
@@ -309,7 +309,7 @@ def main(args):
         tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target)
     else:
         tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target="opencl -device=mali", target_host=target)
-    tune_trials = 10 * (at_least_trials + num_per_round) * len(tasks)
+    tune_trials = 1 * (at_least_trials + num_per_round) * len(tasks)
     print("tune_trials: " + str(tune_trials))
     ########### Tuning ###########
     print("Begin tuning...")
@@ -362,7 +362,7 @@ if __name__ == '__main__':
     batch_size=64,
     test_batch_size=1,  # 64
     fine_tune=True,
-    fine_tune_epochs=20,
+    fine_tune_epochs=3,
     experiment_data_dir='./',
     base_algo='l1',
     sparsity=0.1,
