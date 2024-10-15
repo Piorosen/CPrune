@@ -4,7 +4,7 @@ build:
 	docker build -t chacha/cprune:3.8 .
 
 run: 
-	sudo docker run --network host -d -v $(shell pwd):/work chacha/cprune:3.8
+	docker run -p 5911:5911 -d -v $(shell pwd):/work chacha/cprune:3.8
 # bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 
 recover:

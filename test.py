@@ -30,4 +30,4 @@ torch.onnx.export(model,               # 실행될 모델
                   dynamic_axes={'input' : {0 : 'batch_size'},    # 가변적인 길이를 가진 차원
                                 'output' : {0 : 'batch_size'}})
 
-# %%
+# %%[]
