@@ -109,7 +109,8 @@ class CPruner(Pruner):
         device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
         arch = "arm64"
         # target = "llvm -mtriple=%s-linux-android" % arch        
-        target = "llvm -mtriple=%s-linux-none" % arch
+        # target = "llvm -mtriple=%s-linux-none" % arch
+        target = "llvm"
         device_key = os.getenv("ID_OPTIMIZATION_HARDWARE")
         log_file = "%s.log" % (device_key)
         dtype = "float32"
@@ -213,10 +214,10 @@ class CPruner(Pruner):
         intermediate = 0
         pruning_times = [0.0 for i in range(conv2d_num)]
         real_pruning_times = [0.0 for i in range(conv2d_num)]
-        at_least_trials = 0
-        num_per_round = 1
-        runner_number = 1 # 10
-        runner_repeat = 1  # 2
+        at_least_trials = 20
+        num_per_round = 60
+        runner_number = 10 # 10
+        runner_repeat = 2  # 2
         tune_trials = (at_least_trials + num_per_round) * len(tasks) #(conv2d_num + others_num)        
         minimum_acc_requirement = self._acc_requirement
         

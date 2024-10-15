@@ -279,7 +279,8 @@ def main(args):
         model.load_state_dict(torch.load(os.path.join(args.experiment_data_dir, 'model_fine_tuned.pth')))
     arch = "arm64"
     # target = "llvm -mtriple=%s-linux-android" % arch
-    target = "llvm -mtriple=%s-linux-none" % arch
+    # target = "llvm -mtriple=%s-linux-none" % arch
+    target = "llvm"
     device_key = os.getenv("ID_OPTIMIZATION_HARDWARE")
     log_file = "%s.log" % (device_key)
     dtype = "float32"
@@ -332,11 +333,19 @@ def main(args):
                 lib = relay.build(mod, params=params, target="opencl -device=mali", target_host=target)
 
     tmp = utils.tempdir()
-    lib_fname = tmp.relpath("net.so")
-    lib.export_library(lib_fname, ndk.create_shared)
-    remote = auto_scheduler.utils.request_remote(device_key, tracker_host, tracker_port, timeout=200)
-    remote.upload(lib_fname)
-    rlib = remote.load_module("net.so")
+    if use_android:
+        lib_fname = tmp.relpath("net.so")
+        lib.export_library(lib_fname, ndk.create_shared)
+        remote = auto_scheduler.utils.request_remote(device_key, tracker_host, tracker_port, timeout=200)
+        remote.upload(lib_fname)
+        rlib = remote.load_module("net.so")
+    else:
+        lib_fname = tmp.relpath("net.tar")
+        lib.export_library(lib_fname)
+        remote = auto_scheduler.utils.request_remote(device_key, tracker_host, tracker_port, timeout=200)
+        remote.upload(lib_fname)
+        rlib = remote.load_module("net.tar")
+        
     if cpu_or_gpu == 1:
         ctx = remote.cpu()
     else:
@@ -357,7 +366,7 @@ if __name__ == '__main__':
     args = SimpleNamespace(
     accuracy_requirement=0.85,
     dataset='imagenet',
-    data_dir='./data_fast/imagenet',
+    data_dir='./imagenet',
     model='resnet18',
     batch_size=64,
     test_batch_size=1,  # 64

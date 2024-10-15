@@ -5,7 +5,6 @@ import torchvision.models as models
 from nni.compression.pytorch import ModelSpeedup
 import torch.onnx
 
-
 #%%
 model = models.resnet18(pretrained=True).to('cpu')
 # %%
