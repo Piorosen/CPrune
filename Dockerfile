@@ -26,4 +26,7 @@ RUN apt install -y lsb-release wget software-properties-common gnupg libzstd-dev
 
 COPY setup.sh setup.sh 
 
+RUN git config --global user.email "chacha@udon.party" && \
+    git config --global user.name "Piorosen"
+
 CMD ["/usr/sbin/sshd", "-D"]
