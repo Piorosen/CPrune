@@ -1,9 +1,7 @@
 from multiprocessing import Process
-import logging
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import copy
-import json
 import torch
 
 from nni.compression.pytorch.compressor import Pruner
@@ -27,8 +25,8 @@ from nni.compression.pytorch.utils.counter import count_flops_params
 from nni.compression.pytorch import ModelSpeedup
 from torch.optim.lr_scheduler import MultiStepLR
 
-from .cpruner import optimizer_tvm
-from .cpruner import Logger 
+from cpruner import optimizer_tvm
+from cpruner import Logger 
 
 logger = Logger().get_logger()
 ###########################################################

@@ -1,6 +1,8 @@
 *.tar.gz
 *.tar.xz
 *.tar
+*-ubyte*
+*.ptr
 meta.bin
 
 *.jpg

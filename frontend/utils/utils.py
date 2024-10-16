@@ -2,11 +2,13 @@
 from torchvision import datasets, transforms
 import torch
 import os
+import ssl
+
 #%%
 def get_data_dataset(dataset, data_dir, batch_size, test_batch_size):
     kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {
     }
-
+    
     if dataset == 'cifar10':
         normalize = transforms.Normalize(
             (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
@@ -48,21 +50,20 @@ def get_data_dataset(dataset, data_dir, batch_size, test_batch_size):
         criterion = torch.nn.CrossEntropyLoss()
     
     elif dataset == 'mnist':
-        normalize = transforms.Normalize(
-            (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         train_loader = torch.utils.data.DataLoader(
             datasets.MNIST(os.path.join(data_dir, 'mnist'), train=True, transform=transforms.Compose([
+                transforms.Grayscale(num_output_channels=1), 
                 transforms.RandomHorizontalFlip(),
-                transforms.RandomCrop(32, 4),
+                transforms.Resize(28),
                 transforms.ToTensor(),
-                normalize,
-            ]), download=True),
+            ]), download=False),
             batch_size=batch_size, shuffle=True, **kwargs)
 
         val_loader = torch.utils.data.DataLoader(
             datasets.MNIST(os.path.join(data_dir, 'mnist'), train=False, transform=transforms.Compose([
+                transforms.Grayscale(num_output_channels=1), 
+                transforms.Resize(28),
                 transforms.ToTensor(),
-                normalize,
             ])),
             batch_size=batch_size, shuffle=False, **kwargs)
         criterion = torch.nn.CrossEntropyLoss()
@@ -155,16 +156,16 @@ def test_top1(model, device, criterion, val_loader):
 
 def get_dummy_input(size, batch_size):
     size[0] = batch_size
-    dummy_input = torch.randn([s])
+    dummy_input = torch.randn(size)
     return dummy_input
 
 def get_input_size(dataset):
     if dataset == 'cifar10':
-        input_size = (1, 3, 32, 32)
+        input_size = [1, 3, 32, 32]
     elif dataset == 'imagenet':
-        input_size = (1, 3, 224, 224)
-    else:
-        input_size = (1, 3, 224, 224)
+        input_size = [1, 3, 224, 224]
+    elif dataset == 'mnist':
+        input_size = [1, 1, 32, 32]
     return input_size
 
 

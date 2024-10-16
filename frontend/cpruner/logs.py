@@ -13,7 +13,8 @@ class Logger:
     def __init__(self):
         """로거를 설정합니다. 이 메서드는 한 번만 실행됩니다."""
         if Logger._instance is not None:
-            raise Exception("This class is a singleton!")
+            # raise Exception("This class is a singleton!")
+            pass
         else:
             Logger._instance = self._setup_logger()
 

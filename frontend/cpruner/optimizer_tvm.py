@@ -6,13 +6,12 @@ import numpy as np
 import time
 from tvm.contrib import utils, ndk, graph_runtime as runtime
 from tvm.contrib import graph_executor
-
 from .logs import Logger
 from .structure import *
 
 logger = Logger().get_logger()
 
-def evaluate_tvm(mod, params, input_name, data: OptimizerTVMInput, log_file) -> NDArray[floating[Any]]:
+def evaluate_tvm(mod, params, input_name, data: OptimizerTVMInput, log_file):
     print("Compile...")
     with auto_scheduler.ApplyHistoryBest(log_file):
         with tvm.transform.PassContext(opt_level=3, config={"relay.backend.use_auto_scheduler": True}):

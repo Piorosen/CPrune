@@ -1,13 +1,15 @@
 #%%
+
+
 import os
 import torch.utils.data
 import torchvision.models as models
 from c_pruner import CPruner
 from nni.compression.pytorch import ModelSpeedup
 
-from .cpruner import Logger, DeviceType
-from .utils import *
-from .models.implements.cnn.mnist.
+from cpruner import Logger, DeviceType
+from utils import *
+from models.implements.cnn.mnist import LeNet
 logger = Logger()
 
 ###########################################################
@@ -18,15 +20,16 @@ def main(args):
     # For Training
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader, val_loader, criterion = get_data_dataset(args.dataset, args.data_dir, args.batch_size, args.test_batch_size)
+    model = LeNet().to(device)
     
     # model = models.resnet18(pretrained=True).to(device)
 
-    dummy_input = get_dummy_input()
-    input_size = get_input_size()
+    input_size = get_input_size(args.dataset)
+    dummy_input = get_dummy_input(input_size, args.batch_size).to(device)
     acc_requirement = args.accuracy_requirement
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9, weight_decay=5e-4)
     
     def short_term_trainer(model, optimizer=optimizer, epochs=1):
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9, weight_decay=5e-4)
         train(args, model, device, train_loader, criterion, optimizer, epochs)
 
     def evaluator(model):
@@ -34,6 +37,8 @@ def main(args):
 
     def evaluator_top1(model):
         return test_top1(model, device, criterion, val_loader)
+    
+    short_term_trainer(model, epochs=10)
     
     # ImageNet
     if args.dataset == 'imagenet':
@@ -47,7 +52,7 @@ def main(args):
         print('Original model - Top-1 Accuracy: %s, Top-5 Accuracy: %s' %(accuracy, accuracy_5))
     # CIFAR-10
     elif args.dataset == 'cifar10' or args.dataset == 'mnist':
-        accuracy = evaluator_top1(model)
+        _, accuracy = evaluator_top1(model)
         print('Original model - Top-1 Accuracy: %s' %(accuracy))
         
     # module types to prune, only "Conv2d" supported for channel pruning
@@ -214,3 +219,5 @@ if __name__ == '__main__':
     speed_up=True
     )
     main(args)
+
+# %%
