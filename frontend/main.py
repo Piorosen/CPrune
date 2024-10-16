@@ -32,6 +32,7 @@ from nni.compression.pytorch import ModelSpeedup
 from torch.optim.lr_scheduler import MultiStepLR
 
 from .cpruner import Logger
+from .utils import *
 
 logger = Logger()
 
@@ -47,16 +48,16 @@ def main(args):
     
     train_loader, val_loader, criterion = get_data(args.dataset, args.data_dir, args.batch_size, args.test_batch_size)
     # ResNet18 for CIFAR-10
-    if args.model == 'resnet18' and args.dataset == 'cifar10':
-        model = ResNet18().to(device) #VGG(depth=16).to(device)
-        model.load_state_dict(torch.load('./model_trained.pth'))
-    # torchvision models for ImageNet
-    elif args.model == 'resnet18':
-        model = models.resnet18(pretrained=True).to(device)
-    elif args.model == 'mobilenetv2':
-        model = models.mobilenet_v2(pretrained=True).to(device)
-    elif args.model == 'mnasnet1_0':
-        model = models.mnasnet1_0(pretrained=True).to(device)
+    # if args.model == 'resnet18' and args.dataset == 'cifar10':
+    #     model = ResNet18().to(device) #VGG(depth=16).to(device)
+    #     model.load_state_dict(torch.load('./model_trained.pth'))
+    # # torchvision models for ImageNet
+    # elif args.model == 'resnet18':
+    #     model = models.resnet18(pretrained=True).to(device)
+    # elif args.model == 'mobilenetv2':
+    #     model = models.mobilenet_v2(pretrained=True).to(device)
+    # elif args.model == 'mnasnet1_0':
+    model = models.mnasnet1_0(pretrained=True).to(device)
 
     acc_requirement = args.accuracy_requirement
     
@@ -85,6 +86,7 @@ def main(args):
         accuracy = evaluator_top1(model)
         print('Original model - Top-1 Accuracy: %s' %(accuracy))
     # module types to prune, only "Conv2d" supported for channel pruning
+    
     if args.base_algo in ['l1', 'l2', 'fpgm']:
         op_types = ['Conv2d']
     elif args.base_algo == 'level':
@@ -94,8 +96,9 @@ def main(args):
         'sparsity': args.sparsity,
         'op_types': op_types
     }]
-    dummy_input = get_dummy_input(args, device)
-    input_size = get_input_size(args.dataset)    
+    
+    dummy_input = get_dummy_input()
+    input_size = get_input_size()    
     pruner = CPruner(model, 
                      config_list, 
                      short_term_trainer=short_term_trainer, 

@@ -1,3 +1,4 @@
+#%%
 from torchvision import datasets, transforms
 import torch
 
@@ -131,17 +132,17 @@ def test_top1(model, device, criterion, val_loader):
 
     return accuracy
 
-def get_dummy_input(args, device):
-    if args.dataset == 'cifar10':
-        dummy_input = torch.randn([args.test_batch_size, 3, 32, 32]).to(device)
-    elif args.dataset == 'imagenet':
-        dummy_input = torch.randn([args.test_batch_size, 3, 224, 224]).to(device)
-    return dummy_input
 
+def get_dummy_input(size, batch_size):
+    size[0] = batch_size
+    dummy_input = torch.randn([s])
+    return dummy_input
 
 def get_input_size(dataset):
     if dataset == 'cifar10':
         input_size = (1, 3, 32, 32)
     elif dataset == 'imagenet':
-        input_size = (None, None, None, None)
+        input_size = (1, 3, 224, 224)
+    else:
+        input_size = (1, 3, 224, 224)
     return input_size
