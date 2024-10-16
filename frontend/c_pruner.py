@@ -50,7 +50,7 @@ class CPruner(Pruner):
     evaluator : function
         function to evaluate the masked model
     '''
-    def __init__(self, model, config_list, short_term_trainer, evaluator, val_loader, dummy_input, criterion, base_algo='l1', experiment_data_dir='./', cpu_or_gpu=1, input_size=(1, 3, 224, 224), dataset='imagenet', acc_requirement=0.85):
+    def __init__(self, model, config_list, short_term_trainer, evaluator, dummy_input, base_algo='l1', experiment_data_dir='./', cpu_or_gpu=1, input_size=(1, 3, 224, 224), acc_requirement=0.85):
         # models used for iterative pruning and evaluation
         self._model_to_prune = copy.deepcopy(model)
         self._original_model = copy.deepcopy(model)
@@ -72,11 +72,8 @@ class CPruner(Pruner):
         self._tmp_model_path = './tmp_model.pth'
 
         # addition
-        self._val_loader = val_loader
-        self._criterion = criterion
         self._dummy_input = dummy_input
         self._input_size = input_size
-        self._dataset = dataset
         self._acc_requirement = acc_requirement
 
     def _update_config_list(self, config_list, op_name, sparsity):
@@ -226,10 +223,10 @@ class CPruner(Pruner):
         logger.info('Current latency: {:>8.4f}, Total estimated latency: {:>8.4f}'.format(current_latency, total_estimated_latency))
         logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f}, Total estimated latency: {:>8.4f}\n'.format(budget, current_latency, total_estimated_latency))
         
-        if self._dataset == 'cifar10':
-            current_accuracy = self._evaluator(self._model_to_prune)                
-        elif self._dataset == 'imagenet':
-            _, current_accuracy = self._evaluator(self._model_to_prune)
+        # if self._dataset == 'cifar10':
+        #     current_accuracy = self._evaluator(self._model_to_prune)                
+        # elif self._dataset == 'imagenet':
+        _, current_accuracy = self._evaluator(self._model_to_prune)
         target_latency = current_latency * beta
 
         # stop condition
@@ -307,8 +304,6 @@ class CPruner(Pruner):
                 # added 1: Autotune + TVM build
                 model.eval()
                 
-                model.eval()
-                
                 input_data = torch.randn(self._input_size).to(device)
                 pos, conv2d_subgraph_chs, conv2d_num, others_num = self._get_extract_subgraph(model, self._input_size)
                 pruning_times, real_pruning_times, temp_latency = optimizer_tvm.optimizing(model, 
@@ -339,31 +334,22 @@ class CPruner(Pruner):
                     # Short-term fine tune the pruned model
                     optimizer = torch.optim.SGD(model_masked.parameters(), lr=0.0001, momentum=0.9, weight_decay=5e-4)                    
                     best_acc = 0
-                    short_num = 5
                     
-                    if self._dataset == 'imagenet':
-                        best_acc_5 = 0
-                        short_num = 1
+                    best_acc_5 = 0
+                    short_num = 5 # Training Epoch
+                    
                     for epoch in range(short_num):
                         self._short_term_trainer(model_masked, optimizer, epochs=epoch)
-                        if self._dataset == 'imagenet':
-                            acc, acc_5 = self._evaluator(model_masked)
-                            if acc_5 > best_acc_5:
-                                best_acc_5 = acc_5
-                            if acc > best_acc:
-                                best_acc = acc
-                        elif self._dataset == 'cifar10':
-                            acc = self._evaluator(model_masked)
-                            if acc > best_acc:
-                                best_acc = acc
-                    if self._dataset == 'cifar10':
-                        print('Subgraph: {}, Short_tune - Top-1 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc))
-                        logger.info('Subgraph: {}, Top-1 Accuracy: {:>8.5f} \n'.format(wrapper.name, best_acc))
-                    elif self._dataset == 'imagenet':
-                        print('Subgraph: {}, Short_tune - Top-1 Accuracy: {:>8.5f}, Top-5 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc, best_acc_5))
-                        logger.info('Subgraph: {}, Top-1 Accuracy: {:>8.5f}, Top-5 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc, best_acc_5))
+                        acc, acc_5 = self._evaluator(model_masked)
+                        if acc_5 > best_acc_5:
+                            best_acc_5 = acc_5
+                        if acc > best_acc:
+                            best_acc = acc
+                    print('Subgraph: {}, Short_tune - Top-1 Accuracy: {:>8.5f}, Top-5 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc, best_acc_5))
+                    logger.info('Subgraph: {}, Top-1 Accuracy: {:>8.5f}, Top-5 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc, best_acc_5))
                     ################ Added part to avoid excessive accuracy decrement ###############
-                    temp_acc = best_acc_5 if self._dataset == 'imagenet' else best_acc
+                    # temp_acc = best_acc_5 if self._dataset == 'imagenet' else best_acc
+                    temp_acc = best_acc_5
                     if temp_acc < alpha * current_accuracy: 
                         logger.info('Too low short-term accuracy! Improper subgraph: {}\n'.format(wrapper.name))
                         for wrapper_idx in task_times_rank[init_cnt: init_cnt + overlap_num]:

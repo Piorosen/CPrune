@@ -17,3 +17,10 @@
 3. Mobile BERT
 ```
 
+```
+1. ImageNet
+2. Cifar 10
+3. MNIST
+4. VOC (if have a time.)
+5. COCO (if have a time.)
+```

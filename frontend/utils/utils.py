@@ -1,8 +1,9 @@
 #%%
 from torchvision import datasets, transforms
 import torch
-
-def get_data(dataset, data_dir, batch_size, test_batch_size):
+import os
+#%%
+def get_data_dataset(dataset, data_dir, batch_size, test_batch_size):
     kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {
     }
 
@@ -10,7 +11,7 @@ def get_data(dataset, data_dir, batch_size, test_batch_size):
         normalize = transforms.Normalize(
             (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         train_loader = torch.utils.data.DataLoader(
-            datasets.CIFAR10(data_dir, train=True, transform=transforms.Compose([
+            datasets.CIFAR10(os.path.join(data_dir, 'cifar10'), train=True, transform=transforms.Compose([
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomCrop(32, 4),
                 transforms.ToTensor(),
@@ -19,32 +20,51 @@ def get_data(dataset, data_dir, batch_size, test_batch_size):
             batch_size=batch_size, shuffle=True, **kwargs)
 
         val_loader = torch.utils.data.DataLoader(
-            datasets.CIFAR10(data_dir, train=False, transform=transforms.Compose([
+            datasets.CIFAR10(os.path.join(data_dir, 'cifar10'), train=False, transform=transforms.Compose([
                 transforms.ToTensor(),
                 normalize,
             ])),
             batch_size=batch_size, shuffle=False, **kwargs)
         criterion = torch.nn.CrossEntropyLoss()
+        
     elif dataset == 'imagenet':
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        train_transform = transforms.Compose([
+                    transforms.RandomResizedCrop(224),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ])
+        trainset = datasets.ImageNet(os.path.join(data_dir, 'imagenet'), split='train', download=None, transform=train_transform)
+        train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, **kwargs)
+        
+        val_transform = transforms.Compose([
+                    transforms.Resize(256),
+                    transforms.CenterCrop(224),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ])
+        valset = datasets.ImageNet(os.path.join(data_dir, 'imagenet'), split='val', download=None, transform=val_transform)
+        val_loader = torch.utils.data.DataLoader(valset, batch_size=test_batch_size, **kwargs)
+        criterion = torch.nn.CrossEntropyLoss()
+    
+    elif dataset == 'mnist':
+        normalize = transforms.Normalize(
+            (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         train_loader = torch.utils.data.DataLoader(
-            datasets.ImageFolder(os.path.join(data_dir, 'val'),
-                                 transform=transforms.Compose([
-                                     transforms.RandomResizedCrop(224),
-                                     transforms.RandomHorizontalFlip(),
-                                     transforms.ToTensor(),
-                                     normalize,
-                                 ])),
+            datasets.MNIST(os.path.join(data_dir, 'mnist'), train=True, transform=transforms.Compose([
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomCrop(32, 4),
+                transforms.ToTensor(),
+                normalize,
+            ]), download=True),
             batch_size=batch_size, shuffle=True, **kwargs)
+
         val_loader = torch.utils.data.DataLoader(
-            datasets.ImageFolder(os.path.join(data_dir, 'val'),
-                                 transform=transforms.Compose([
-                                     transforms.Resize(256),
-                                     transforms.CenterCrop(224),
-                                     transforms.ToTensor(),
-                                     normalize,
-                                 ])),
-            batch_size=test_batch_size, **kwargs)
+            datasets.MNIST(os.path.join(data_dir, 'mnist'), train=False, transform=transforms.Compose([
+                transforms.ToTensor(),
+                normalize,
+            ])),
+            batch_size=batch_size, shuffle=False, **kwargs)
         criterion = torch.nn.CrossEntropyLoss()
     return train_loader, val_loader, criterion
 
@@ -130,7 +150,7 @@ def test_top1(model, device, criterion, val_loader):
         test_loss, correct, len(val_loader.dataset), 100. * accuracy))
     file_object.close()
 
-    return accuracy
+    return accuracy, accuracy
 
 
 def get_dummy_input(size, batch_size):
@@ -146,3 +166,5 @@ def get_input_size(dataset):
     else:
         input_size = (1, 3, 224, 224)
     return input_size
+
+
