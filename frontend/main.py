@@ -30,9 +30,13 @@ from nni.compression.pytorch.utils.counter import count_flops_params
 
 from nni.compression.pytorch import ModelSpeedup
 from torch.optim.lr_scheduler import MultiStepLR
+
+from .cpruner import Logger
+
+logger = Logger()
+
 ###########################################################
 #%%
-
 
 
 def main(args):
@@ -92,7 +96,19 @@ def main(args):
     }]
     dummy_input = get_dummy_input(args, device)
     input_size = get_input_size(args.dataset)    
-    pruner = CPruner(model, config_list, short_term_trainer=short_term_trainer, evaluator=evaluator if args.dataset == 'imagenet' else evaluator_top1, val_loader=val_loader, dummy_input=dummy_input, criterion=criterion, base_algo=args.base_algo, experiment_data_dir=args.experiment_data_dir, cpu_or_gpu=cpu_or_gpu, input_size=input_size, dataset=args.dataset, acc_requirement=acc_requirement)
+    pruner = CPruner(model, 
+                     config_list, 
+                     short_term_trainer=short_term_trainer, 
+                     evaluator=evaluator if args.dataset == 'imagenet' else evaluator_top1, 
+                     val_loader=val_loader, 
+                     dummy_input=dummy_input, 
+                     criterion=criterion, 
+                     base_algo=args.base_algo, 
+                     experiment_data_dir=args.experiment_data_dir, 
+                     cpu_or_gpu=cpu_or_gpu, 
+                     input_size=input_size, 
+                     dataset=args.dataset, 
+                     acc_requirement=acc_requirement)
     # Pruner.compress() returns the masked model
     model = pruner.compress()
 

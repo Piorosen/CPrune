@@ -143,5 +143,5 @@ def get_input_size(dataset):
     if dataset == 'cifar10':
         input_size = (1, 3, 32, 32)
     elif dataset == 'imagenet':
-        input_size = (1, 3, 224, 224)
+        input_size = (None, None, None, None)
     return input_size
