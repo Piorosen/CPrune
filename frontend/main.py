@@ -31,7 +31,8 @@ def main(args):
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9, weight_decay=5e-4)
     
     def short_term_trainer(model, optimizer=optimizer, epochs=1):
-        train(args, model, device, train_loader, criterion, optimizer, epochs)
+        for e in range(epochs):
+            train(args, model, device, train_loader, criterion, optimizer, e)
 
     def evaluator(model):
         return test(model, device, criterion, val_loader)
@@ -44,8 +45,8 @@ def main(args):
     if os.path.exists(file_name):
         model.load_state_dict(torch.load(file_name))
     else:
-        os.makedirs(args.experiment_data_dir)
-        short_term_trainer(model, epochs=10)
+        os.makedirs(args.experiment_data_dir, exist_ok=True)
+        short_term_trainer(model, epochs=100)
         torch.save(model.state_dict(), file_name)
     
     # ImageNet
@@ -60,9 +61,9 @@ def main(args):
         print('Original model - Top-1 Accuracy: %s, Top-5 Accuracy: %s' %(accuracy, accuracy_5))
     # CIFAR-10
     elif args.dataset == 'cifar10' or args.dataset == 'mnist':
-        pass
-        # _, accuracy = evaluator_top1(model)
-        # print('Original model - Top-1 Accuracy: %s' %(accuracy))
+        # pass
+        _, accuracy = evaluator_top1(model)
+        print('Original model - Top-1 Accuracy: %s' %(accuracy))
         
     # module types to prune, only "Conv2d" supported for channel pruning
     if args.base_algo in ['l1', 'l2', 'fpgm']:
@@ -118,7 +119,7 @@ if __name__ == '__main__':
     dataset='mnist',
     data_dir='/work/dataset',
     model='LeNet',
-    batch_size=64,
+    batch_size=512,
     test_batch_size=1,  # 64
     fine_tune=True,
     fine_tune_epochs=3,

@@ -1,5 +1,13 @@
 # FROM python:3.12.6-bookworm
-FROM python:3.8.17-buster
+# FROM python:3.8.17-buster
+# FROM nvcr.io/nvidia/pytorch:22.10-py3
+FROM nvcr.io/nvidia/cuda:12.6.2-base-ubuntu20.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && \
+    apt-get install -yq tzdata && \
+    ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata
 
 WORKDIR /work
 
@@ -24,9 +32,17 @@ RUN apt install -y lsb-release wget software-properties-common gnupg libzstd-dev
     wget https://apt.llvm.org/llvm.sh && \
     chmod +x llvm.sh && ./llvm.sh 12 all
 
-COPY setup.sh setup.sh 
 
-RUN git config --global user.email "chacha@udon.party" && \
-    git config --global user.name "Piorosen"
+RUN apt install -y curl wget python3.8 python3.8-distutils && \
+        curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+        python3.8 get-pip.py && \
+        
+        
+COPY setup.sh setup.sh 
+# RUN echo 'export PATH=/opt/conda/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH' >> /root/.bashrc && source ~/.bashrc
+# RUN ./setup.sh
+
+# RUN git config --global user.email "chacha@udon.party" && \
+#     git config --global user.name "Piorosen"
 
 CMD ["/usr/sbin/sshd", "-D"]

@@ -1,5 +1,5 @@
 #!/bin/bash
-chown -R root:root /work
+# chown -R root:root /work
 
 git config --global --add safe.directory /work
 
@@ -26,11 +26,11 @@ cd /work/3rdparty/tvm && \
 echo 'export TVM_HOME=/work/3rdparty/tvm' >> ~/.bashrc && \
 echo 'export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH' >> ~/.bashrc && \
 echo 'export TVM_LIBRARY_PATH=$TVM_HOME/build' >> ~/.bashrc && source ~/.bashrc
+echo 'export PATH=/opt/conda/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH' >> /root/.bashrc && source ~/.bashrc
 
 pip install --upgrade pip
 pip install -e /work/3rdparty/tvm/python
-pip install setuptools nni==2.10 pytest python-dotenv numpy==1.19.5 xgboost==1.4.2 tensorboard
-# pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0
-pip install torch==1.8.0+cpu torchvision==0.9.0+cpu torchaudio==0.8.0 -f https://download.pytorch.org/whl/torch_stable.html
-
+python3.8 -m pip install setuptools nni==2.10 pytest python-dotenv numpy==1.19.5 xgboost==1.4.2 tensorboard
+python3.8 -m pip install torch==1.8.0+cu111 torchvision==0.9.0+cu111 torchaudio==0.8.0 -f https://download.pytorch.org/whl/torch_stable.html
+# pip install torch torchvision torchaudio  --index-url https://download.pytorch.org/whl/cu121
 cd /work

@@ -28,9 +28,9 @@ class OptimizerTVMInput:
     def __init__(self):
         self.UseAndroid: bool = False
         self.TVM_TrackerHost: str = "0.0.0.0"
-        self.TVM_Archtecture: str = "arm64"
+        self.TVM_Archtecture: str = "x86"
         self.TVM_DataType: str = "float32"
-        self.TVM_Target: str = "llvm"
+        self.TVM_Target: str = "llvm -mtriple=x86_64-linux-gnu"
         self.Subgraph = ExtractSubgraph()
       
     Model: Any
