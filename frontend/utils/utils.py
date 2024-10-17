@@ -155,8 +155,9 @@ def test_top1(model, device, criterion, val_loader):
 
 
 def get_dummy_input(size, batch_size):
-    size[0] = batch_size
-    dummy_input = torch.randn(size)
+    p = size.copy()
+    p[0] = batch_size
+    dummy_input = torch.randn(p)
     return dummy_input
 
 def get_input_size(dataset):
@@ -165,7 +166,7 @@ def get_input_size(dataset):
     elif dataset == 'imagenet':
         input_size = [1, 3, 224, 224]
     elif dataset == 'mnist':
-        input_size = [1, 1, 32, 32]
+        input_size = [1, 1, 28, 28]
     return input_size
 
 

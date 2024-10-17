@@ -31,6 +31,7 @@ class OptimizerTVMInput:
         self.TVM_Archtecture: str = "arm64"
         self.TVM_DataType: str = "float32"
         self.TVM_Target: str = "llvm"
+        self.Subgraph = ExtractSubgraph()
       
     Model: Any
     InputData: torch.Tensor
@@ -56,8 +57,9 @@ class OptimizerTVMOutput:
         self.CurrentLatency = np.array([])
         self.TotalEstimatedLatency = 0
         self.SubgraphTasks = []
+        self.PruneNum = {}
         
-    Tuner: auto_scheduler.TaskScheduler
+    PruneNum: dict
     PruningTime: List[float]
     RealPruningTime: List[float]
     CurrentLatency: Union[np.ndarray, float] # Tuning 중에 얻은 값

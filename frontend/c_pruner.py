@@ -25,6 +25,8 @@ from nni.compression.pytorch.utils.counter import count_flops_params
 from nni.compression.pytorch import ModelSpeedup
 from torch.optim.lr_scheduler import MultiStepLR
 
+from utils import get_dummy_input
+from cpruner import DeviceType
 from cpruner import optimizer_tvm
 from cpruner import Logger 
 
@@ -48,9 +50,8 @@ class CPruner(Pruner):
     evaluator : function
         function to evaluate the masked model
     '''
-    def __init__(self, model, config_list, short_term_trainer, evaluator, dummy_input, base_algo='l1', experiment_data_dir='./', cpu_or_gpu=1, input_size=(1, 3, 224, 224), acc_requirement=0.85):
+    def __init__(self, model, config_list, short_term_trainer, evaluator, base_algo='l1', experiment_data_dir='./', cpu_or_gpu=DeviceType.CPU, input_size=(1, 3, 224, 224), acc_requirement=0.85):
         # models used for iterative pruning and evaluation
-        self._model_to_prune = copy.deepcopy(model)
         self._original_model = copy.deepcopy(model)
         self._base_algo = base_algo
         self._cpu_or_gpu = cpu_or_gpu
@@ -70,8 +71,8 @@ class CPruner(Pruner):
         self._tmp_model_path = './tmp_model.pth'
 
         # addition
-        self._dummy_input = dummy_input
         self._input_size = input_size
+        self._dummy_input = get_dummy_input(input_size, 4)
         self._acc_requirement = acc_requirement
 
     def _update_config_list(self, config_list, op_name, sparsity):
@@ -97,8 +98,9 @@ class CPruner(Pruner):
 
         return config_list_updated
 
-    def _get_extract_subgraph(_model_to_prune, _input_size):
-        _, _, temp_results = count_flops_params(_model_to_prune, _input_size)
+    def _get_extract_subgraph(self, model) -> optimizer_tvm.ExtractSubgraph:
+        _input_size = self._input_size
+        _, _, temp_results = count_flops_params(model, tuple(_input_size))
         
         conv2d_num = 0
         others_num = 0
@@ -146,12 +148,18 @@ class CPruner(Pruner):
                    temp_results[n].get('params') == temp_results[i].get('params'):
                     pos.append(i)
                     list_filled[i] = 1
-
         pos = pos + downsample_subgraphs
         
-        return (pos, conv2d_subgraph_chs, conv2d_num, others_num)
+        result = optimizer_tvm.ExtractSubgraph()
+        
+        result.Pos = pos
+        result.SubgraphConv2d = conv2d_subgraph_chs
+        result.NumConv2d = conv2d_num
+        result.NumOthers = others_num
+        
+        return result
     
-    def _pre_prunning(run: bool):
+    def _pre_prunning(self, model, run: bool):
         if run:
             real_pruning_times = [0]
             subgraph_idx = 0
@@ -160,7 +168,7 @@ class CPruner(Pruner):
                     target_op_sparsity = real_pruning_times[subgraph_idx]
                     self._config_list_generated = self._update_config_list(
                         self._config_list_generated, wrapper.name, target_op_sparsity)
-                    pruner = PRUNER_DICT[self._base_algo](copy.deepcopy(self._model_to_prune), self._config_list_generated, dependency_aware=True, dummy_input=self._dummy_input)
+                    pruner = PRUNER_DICT[self._base_algo](copy.deepcopy(model), self._config_list_generated, dependency_aware=True, dummy_input=self._dummy_input)
                     model_masked = pruner.compress()
                     masks = {}
                     for w in pruner.get_modules_wrapper():
@@ -189,21 +197,29 @@ class CPruner(Pruner):
         # target = "llvm -mtriple=%s-linux-android" % arch        
         # target = "llvm -mtriple=%s-linux-none" % arch
         use_android = False
-        self._model_to_prune.eval()
+        model_to_Prune = copy.deepcopy(self._original_model)
+        model_to_Prune.eval()
 
         input_data = torch.randn(self._input_size).to(device)
         
         ######################################################################
         
-        pos, conv2d_subgraph_chs, conv2d_num, others_num = self._get_extract_subgraph(self._model_to_prune, self._input_size)
-        pruning_times, real_pruning_times, current_latency, total_estimated_latency = optimizer_tvm.optimizing(self._model_to_prune, 
-                                 input_data, 
-                                 self._input_size, 
-                                 self._cpu_or_gpu,
-                                 conv2d_num,
-                                 others_num,
-                                 pos,
-                                 self._acc_requirement)
+        subgraph = self._get_extract_subgraph(model_to_Prune)
+        
+        input = optimizer_tvm.OptimizerTVMInput()
+        input.Model = model_to_Prune
+        input.InputData = input_data
+        input.InputSize = self._input_size
+        input.DeviceType = self._cpu_or_gpu
+        input.Subgraph = subgraph
+        input.TVM_DeviceKey = os.getenv("ID_OPTIMIZATION_HARDWARE")
+        input.TVM_TrackerHost = os.environ.get("TVM_TRACKER_HOST", "0.0.0.0")
+        input.TVM_TrackerPort = int(os.environ["TVM_TRACKER_PORT"])
+        
+        tune_first = os.path.join(self._experiment_data_dir, 'tvm')
+        os.makedirs(tune_first)
+        tune_first = os.path.join(tune_first, "baseline.log")
+        output = optimizer_tvm.optimizing(input, tune_first)
 
         pass_target_latency = 0
         init_short_acc = 0
@@ -213,20 +229,21 @@ class CPruner(Pruner):
         beta = 0.99  # target_latency = beta * current_best_latency
         max_iter = 1
         pruning_iteration = 1
-        budget = 0.1 * current_latency
+        budget = 0.1 * output.CurrentLatency.mean()
         
         #################################################        
-        
-        
-        logger.info('Current latency: {:>8.4f}, Total estimated latency: {:>8.4f}'.format(current_latency, total_estimated_latency))
-        logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f}, Total estimated latency: {:>8.4f}\n'.format(budget, current_latency, total_estimated_latency))
         
         # if self._dataset == 'cifar10':
         #     current_accuracy = self._evaluator(self._model_to_prune)                
         # elif self._dataset == 'imagenet':
-        _, current_accuracy = self._evaluator(self._model_to_prune)
-        target_latency = current_latency * beta
-
+        
+        # setting default value. so initailize value of default before tunning.
+        # Compute Accuracy for what?, Not yet prunned.
+        _, current_accuracy = self._evaluator(model_to_Prune)
+        # for what target latency?
+        current_latency = output.CurrentLatency.mean()
+        target_latency = current_latency.mean() * beta
+        
         # stop condition
         while pruning_iteration < max_iter and current_latency > budget:
             # calculate target sparsity of this iteration
@@ -248,7 +265,7 @@ class CPruner(Pruner):
             best_op = {}
             
             ########################### Pre-pruning (if it is necessary) ##########################
-            self._pre_prunning(False)
+            self._pre_prunning(model_to_Prune, False)
             ######################################################################
             
             cnt = 0
@@ -265,7 +282,7 @@ class CPruner(Pruner):
                         break
                 cnt += 1
                 for overlap_cnt in task_times_rank[init_cnt: init_cnt + overlap_num]:
-                    pruning_times[overlap_cnt] += float(tuner.prune_num[subgraph_tasks[overlap_cnt]]) * float(1/conv2d_subgraph_chs[overlap_cnt])
+                    pruning_times[overlap_cnt] += float(output.PruneNum[subgraph_tasks[overlap_cnt]]) * float(1/conv2d_subgraph_chs[overlap_cnt])
                 target_op_sparsity = pruning_times[task_times_rank[init_cnt]]
                 ch_num = int(conv2d_subgraph_chs[task_times_rank[init_cnt]] * (1 - target_op_sparsity))
                 
@@ -303,7 +320,7 @@ class CPruner(Pruner):
                 model.eval()
                 
                 input_data = torch.randn(self._input_size).to(device)
-                pos, conv2d_subgraph_chs, conv2d_num, others_num = self._get_extract_subgraph(model, self._input_size)
+                pos, conv2d_subgraph_chs, conv2d_num, others_num = self._get_extract_subgraph(model)
                 pruning_times, real_pruning_times, temp_latency = optimizer_tvm.optimizing(model, 
                                         input_data, 
                                         self._input_size, 
