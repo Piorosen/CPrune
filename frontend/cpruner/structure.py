@@ -51,17 +51,18 @@ class OptimizerTVMInput:
     
 @dataclass 
 class OptimizerTVMOutput: 
-    def __init__(self):
-        self.PruningTime = []
-        self.RealPruningTime = []
-        self.CurrentLatency = np.array([])
-        self.TotalEstimatedLatency = 0
-        self.SubgraphTasks = []
-        self.PruneNum = {}
-        
+    def __init__(self, task_times, task_times_rank, tune_trials=0, current_latency=np.array([]), total_estimated_latency=0, subgraph_tasks=[], prune_num={}):
+        self.TuneTrials = tune_trials
+        self.CurrentLatency = current_latency
+        self.TotalEstimatedLatency = total_estimated_latency
+        self.SubgraphTasks = subgraph_tasks
+        self.PruneNum = prune_num
+        self.TaskTimes = task_times
+        self.TaskTimesRank = task_times_rank
+    # TaskTimes
+    # TaskTimesRank
     PruneNum: dict
-    PruningTime: List[float]
-    RealPruningTime: List[float]
+    TuneTrials: int
     CurrentLatency: Union[np.ndarray, float] # Tuning 중에 얻은 값
     TotalEstimatedLatency: float             # 실제 수행하였을 때 얻은 값.
     SubgraphTasks: List[int]

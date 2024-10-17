@@ -51,13 +51,11 @@ def evaluate_tvm(mod, params, input_name, data: OptimizerTVMInput, log_file):
     
     return prof_res
 
-def optimizing(data: OptimizerTVMInput, load_log=None) -> OptimizerTVMOutput:
-    _acc_requirement = None
-    
+def optimizing(data: OptimizerTVMInput, load_log=None, at_least_trials = 20, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200) -> OptimizerTVMOutput:
     log_file = "%s.log" % (load_log)
     pkl = "%s.pkl" % (load_log)
     
-    if load_log != None or os.path.exists(pkl):
+    if load_log != None and os.path.exists(pkl):
         with open(pkl, 'rb') as f:
             return pickle.load(f)
     
@@ -96,14 +94,10 @@ def optimizing(data: OptimizerTVMInput, load_log=None) -> OptimizerTVMOutput:
             subgraph_tasks[data.Subgraph.Pos[pos_idx]] = idx
             pos_idx += 1
 
-    
-    pruning_times = [0.0 for _ in range(data.Subgraph.NumConv2d)]
-    real_pruning_times = [0.0 for _ in range(data.Subgraph.NumConv2d)]
-    
-    at_least_trials = 1 # 20
-    num_per_round = 1 # 60
-    runner_number = 1 # 10
-    runner_repeat = 1  # 2
+    # at_least_trials = 1 # 20
+    # num_per_round = 1 # 60
+    # runner_number = 1 # 10
+    # runner_repeat = 1  # 2
     tune_trials = (at_least_trials + num_per_round) * len(tasks) #(conv2d_num + others_num)        
     
     print("Begin tuning...")
@@ -144,18 +138,18 @@ def optimizing(data: OptimizerTVMInput, load_log=None) -> OptimizerTVMOutput:
     current_latency = evaluate_tvm(mod, params, input_name, data, log_file)
     time.sleep(0.01)
     #################################################        
-    budget = 0.1 * current_latency
+    budget = 0.1 * current_latency.mean()
     logger.info('Current latency: {:>8.4f}, Total estimated latency: {:>8.4f}'.format(current_latency.mean(), total_estimated_latency))
     logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f}, Total estimated latency: {:>8.4f}\n'.format(budget, current_latency.mean(), total_estimated_latency))
     
-    result = OptimizerTVMOutput(tuner.prune_num, 
-                             pruning_times, 
-                             real_pruning_times, 
-                             current_latency,
-                             total_estimated_latency,
-                             subgraph_tasks)
+    result = OptimizerTVMOutput(task_times, task_times_rank,
+                                tune_trials, 
+                                current_latency,
+                                total_estimated_latency,
+                                subgraph_tasks,
+                                tuner.prune_num)
 
-    with open('test.pkl', 'wb') as f:
+    with open(pkl, 'wb') as f:
         pickle.dump(result, f)
         
     return result

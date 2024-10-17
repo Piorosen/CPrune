@@ -45,7 +45,6 @@ def main(args):
         model.load_state_dict(torch.load(file_name))
     else:
         os.makedirs(args.experiment_data_dir)
-        os.makedirs(os.path.join(args.experiment_data_dir, 'tvm'))
         short_term_trainer(model, epochs=10)
         torch.save(model.state_dict(), file_name)
     
@@ -86,15 +85,26 @@ def main(args):
                      input_size=input_size, 
                      acc_requirement=acc_requirement)
     
-    # Pruner.compress() returns the masked model
+    # # Pruner.compress() returns the masked model
     model = pruner.compress()
 
     # model speed up
     if args.speed_up:
-        model.load_state_dict(torch.load('./tmp_model.pth'))
-        masks_file = './tmp_mask.pth'
+        model.load_state_dict(torch.load('/work/experiments/mnist_lenet/tvm/001_000000_model.pth'))
+        masks_file = '/work/experiments/mnist_lenet/tvm/001_000000_mask.pth'
         m_speedup = ModelSpeedup(model, dummy_input, masks_file, device)
         m_speedup.speedup_model()
+
+    model.eval() 
+    # torch.onnx.export(model,         # model being run 
+    #      dummy_input,       # model input (or a tuple for multiple inputs) 
+    #      "LeNet.onnx",       # where to save the model  
+    #      export_params=True,  # store the trained parameter weights inside the model file 
+    #      opset_version=16,    # the ONNX version to export the model to 
+    #      do_constant_folding=True,  # whether to execute constant folding for optimization 
+    #      input_names = ['input0'],   # the model's input names 
+    #      output_names = ['output0'], # the model's output names 
+    #      ) 
     
     export_model('./export')
  #%%

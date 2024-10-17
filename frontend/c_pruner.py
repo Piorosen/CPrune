@@ -1,3 +1,4 @@
+import pickle
 from multiprocessing import Process
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -67,8 +68,6 @@ class CPruner(Pruner):
         self._experiment_data_dir = experiment_data_dir
         if not os.path.exists(self._experiment_data_dir):
             os.makedirs(self._experiment_data_dir)
-
-        self._tmp_model_path = './tmp_model.pth'
 
         # addition
         self._input_size = input_size
@@ -159,32 +158,75 @@ class CPruner(Pruner):
         
         return result
     
-    def _pre_prunning(self, model, run: bool):
-        if run:
-            real_pruning_times = [0]
-            subgraph_idx = 0
-            for wrapper in self.get_modules_wrapper():
-                if real_pruning_times[subgraph_idx] > 0:
-                    target_op_sparsity = real_pruning_times[subgraph_idx]
-                    self._config_list_generated = self._update_config_list(
-                        self._config_list_generated, wrapper.name, target_op_sparsity)
-                    pruner = PRUNER_DICT[self._base_algo](copy.deepcopy(model), self._config_list_generated, dependency_aware=True, dummy_input=self._dummy_input)
-                    model_masked = pruner.compress()
-                    masks = {}
-                    for w in pruner.get_modules_wrapper():
-                        if w.name == wrapper.name:
-                            masks = {'weight_mask': w.weight_mask,
-                                        'bias_mask': w.bias_mask}
-                            break
-                    for k in masks:
-                        setattr(wrapper, k, masks[k])
-                subgraph_idx += 1
-            pruning_times = [0]
-            pruning_iteration = 12
-            return 
-        else:
-            return 
+    def _pre_prunning(self, model):
+        real_pruning_times = [0]
+        subgraph_idx = 0
+        for wrapper in self.get_modules_wrapper():
+            if real_pruning_times[subgraph_idx] > 0:
+                target_op_sparsity = real_pruning_times[subgraph_idx]
+                self._config_list_generated = self._update_config_list(
+                    self._config_list_generated, wrapper.name, target_op_sparsity)
+                pruner = PRUNER_DICT[self._base_algo](copy.deepcopy(model), self._config_list_generated, dependency_aware=True, dummy_input=self._dummy_input)
+                model_masked = pruner.compress()
+                masks = {}
+                for w in pruner.get_modules_wrapper():
+                    if w.name == wrapper.name:
+                        masks = {'weight_mask': w.weight_mask,
+                                    'bias_mask': w.bias_mask}
+                        break
+                for k in masks:
+                    setattr(wrapper, k, masks[k])
+            subgraph_idx += 1
+        pruning_times = [0]
+        pruning_iteration = 12
+        return 
     
+    def __pruning_layer(self, cnt, task_times, task_times_rank, pruning_times, subgraph_tasks, conv2d_subgraph_chs, PruneNum, model,
+                        output_mask, output_model):
+        init_cnt = cnt
+        overlap_num = 1
+        while True:
+            if cnt + 1 == len(task_times_rank):
+                break
+            if task_times[task_times_rank[cnt]] == task_times[task_times_rank[cnt+1]]:
+                overlap_num += 1
+                cnt += 1
+            else:
+                break
+        cnt += 1
+        
+        for overlap_cnt in task_times_rank[init_cnt: init_cnt + overlap_num]:
+            pruning_times[overlap_cnt] += float(PruneNum[subgraph_tasks[overlap_cnt]]) * float(1/conv2d_subgraph_chs[overlap_cnt])
+        target_op_sparsity = pruning_times[task_times_rank[init_cnt]]
+        ch_num = int(conv2d_subgraph_chs[task_times_rank[init_cnt]] * (1 - target_op_sparsity))
+        
+        if target_op_sparsity > 0.8:
+            logger.info('Improper Subgraph')
+            wrapper = self.get_modules_wrapper()[task_times_rank[init_cnt]]
+            logger.info('Improper Subgraph: ' + wrapper.name + ', Total: ' + str(overlap_num) + ' subgraphs\n')
+            # file_object = open('./record_tvm.txt', 'a')      
+            # file_object.close()
+            return
+
+        config_list = copy.deepcopy(self._config_list_generated)
+        for wrapper_idx in task_times_rank[init_cnt: init_cnt + overlap_num]:
+            wrapper = self.get_modules_wrapper()[wrapper_idx]
+            config_list = self._update_config_list(config_list, wrapper.name, target_op_sparsity)
+
+        wrapper = self.get_modules_wrapper()[task_times_rank[init_cnt]]
+        logger.info('Subgraph: ' + wrapper.name + ', overlap_num: ' + str(overlap_num) + ', ch_num: ' + str(ch_num))
+        # file_object = open('./record_tvm.txt', 'a')
+        logger.info('Subgraph: ' + wrapper.name + ', overlap_num: ' + str(overlap_num) + ', ch_num: ' + str(ch_num) + '\n')
+        logger.info('Temp_pruning_times:' + str(pruning_times) + '\n')
+        # file_object.close()
+        
+        pruner = PRUNER_DICT[self._base_algo](copy.deepcopy(model), config_list, dependency_aware=True, dummy_input=self._dummy_input)
+        if not (os.path.exists(output_mask) or os.path.exists(output_mask)):
+            # added 0: speed_up
+            pruner.export_model(output_model, output_mask)
+        
+        return cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num
+
     def compress(self):
         """
         Compress the model.
@@ -205,6 +247,8 @@ class CPruner(Pruner):
         ######################################################################
         
         subgraph = self._get_extract_subgraph(model_to_Prune)
+        pruning_times = [0.0 for _ in range(subgraph.NumConv2d)]
+        real_pruning_times = [0.0 for _ in range(subgraph.NumConv2d)]
         
         input = optimizer_tvm.OptimizerTVMInput()
         input.Model = model_to_Prune
@@ -217,17 +261,18 @@ class CPruner(Pruner):
         input.TVM_TrackerPort = int(os.environ["TVM_TRACKER_PORT"])
         
         tune_first = os.path.join(self._experiment_data_dir, 'tvm')
-        os.makedirs(tune_first)
-        tune_first = os.path.join(tune_first, "baseline.log")
+        os.makedirs(tune_first, exist_ok=True)
+        tune_first = os.path.join(tune_first, "baseline")
         output = optimizer_tvm.optimizing(input, tune_first)
+        
 
         pass_target_latency = 0
-        init_short_acc = 0
-        performance = 0
+        # init_short_acc = 0
+        # performance = 0
         minimum_acc_requirement = self._acc_requirement
         alpha = 0.995  # target_accuracy = alpha * prev_best_accuracy
         beta = 0.99  # target_latency = beta * current_best_latency
-        max_iter = 1
+        max_iter = 100
         pruning_iteration = 1
         budget = 0.1 * output.CurrentLatency.mean()
         
@@ -243,115 +288,105 @@ class CPruner(Pruner):
         # for what target latency?
         current_latency = output.CurrentLatency.mean()
         target_latency = current_latency.mean() * beta
-        
+        output_model = ""
+        output_mask = ""
         # stop condition
         while pruning_iteration < max_iter and current_latency > budget:
-            # calculate target sparsity of this iteration
-            if pass_target_latency == 1:
-                target_latency = current_latency * beta
-                pass_target_latency = 0
-
             # Print the message
             logger.info('=======================')
             logger.info(('Process iteration {:>3}: current_accuracy = {:>8.4f}, '
-                    'current_latency = {:>8.4f}, target_latency = {:>8.4f}, total_estimated_latency = {:>8.4f}, tune_trials = {:4d} \n').format(pruning_iteration, current_accuracy, current_latency, target_latency, total_estimated_latency, tune_trials))
+                    'current_latency = {:>8.4f}, target_latency = {:>8.4f}, total_estimated_latency = {:>8.4f}, tune_trials = {:4d} \n').format(
+                        pruning_iteration, 
+                        current_accuracy, 
+                        current_latency, 
+                        target_latency, 
+                        output.TotalEstimatedLatency, 
+                        output.TuneTrials))
             # file_object = open('./record_tvm.txt', 'a')            
             logger.info(('Process iteration {:>3}: current_accuracy = {:>8.4f}, '
-                   'current_latency = {:>8.4f}, target_resource = {:>8.4f}, total_estimated_latency = {:>8.4f}, tune_trials = {:4d} \n').format(pruning_iteration, current_accuracy, current_latency, target_latency, total_estimated_latency, tune_trials))
+                   'current_latency = {:>8.4f}, target_resource = {:>8.4f}, total_estimated_latency = {:>8.4f}, tune_trials = {:4d} \n').format(pruning_iteration, current_accuracy, current_latency, target_latency, output.TotalEstimatedLatency, output.TuneTrials))
             logger.info('Current pruning_times: ' + str(pruning_times) + '\n')
             logger.info('Real pruning_times: ' + str(real_pruning_times) + '\n')
 
             # variable to store the info of the best subgraph found in this iteration
-            best_op = {}
             
             ########################### Pre-pruning (if it is necessary) ##########################
-            self._pre_prunning(model_to_Prune, False)
+            if False:
+                self._pre_prunning(model_to_Prune)
             ######################################################################
-            
-            cnt = 0
-            while cnt < len(task_times_rank):
-                init_cnt = cnt
-                overlap_num = 1
-                while True:
-                    if cnt + 1 == len(task_times_rank):
-                        break
-                    if task_times[task_times_rank[cnt]] == task_times[task_times_rank[cnt+1]]:
-                        overlap_num += 1
-                        cnt += 1
-                    else:
-                        break
-                cnt += 1
-                for overlap_cnt in task_times_rank[init_cnt: init_cnt + overlap_num]:
-                    pruning_times[overlap_cnt] += float(output.PruneNum[subgraph_tasks[overlap_cnt]]) * float(1/conv2d_subgraph_chs[overlap_cnt])
-                target_op_sparsity = pruning_times[task_times_rank[init_cnt]]
-                ch_num = int(conv2d_subgraph_chs[task_times_rank[init_cnt]] * (1 - target_op_sparsity))
+            # calculate target sparsity of this iteration
+            if pass_target_latency == 1:
+                target_latency = current_latency * beta
+                pass_target_latency = 0
                 
-                if target_op_sparsity > 0.8:
-                    logger.info('Improper Subgraph')
-                    wrapper = self.get_modules_wrapper()[task_times_rank[init_cnt]]
-                    # file_object = open('./record_tvm.txt', 'a')      
-                    logger.info('Improper Subgraph: ' + wrapper.name + ', Total: ' + str(overlap_num) + ' subgraphs\n')
-                    # file_object.close()
-                    continue
-
-                config_list = copy.deepcopy(self._config_list_generated)
-                for wrapper_idx in task_times_rank[init_cnt: init_cnt + overlap_num]:
-                    wrapper = self.get_modules_wrapper()[wrapper_idx]
-                    config_list = self._update_config_list(config_list, wrapper.name, target_op_sparsity)
-
-                wrapper = self.get_modules_wrapper()[task_times_rank[init_cnt]]
-                logger.info('Subgraph: ' + wrapper.name + ', overlap_num: ' + str(overlap_num) + ', ch_num: ' + str(ch_num))
-                # file_object = open('./record_tvm.txt', 'a')
-                logger.info('Subgraph: ' + wrapper.name + ', overlap_num: ' + str(overlap_num) + ', ch_num: ' + str(ch_num) + '\n')
-                logger.info('Temp_pruning_times:' + str(pruning_times) + '\n')
-                # file_object.close()
-
-                pruner = PRUNER_DICT[self._base_algo](copy.deepcopy(self._model_to_prune), config_list, dependency_aware=True, dummy_input=self._dummy_input)
+            best_op = {}
+            cnt = 0
+            tune_name = ''
+            while cnt < len(output.TaskTimesRank):
+                tune_name = os.path.join(self._experiment_data_dir, 'tvm', f'{str(pruning_iteration).zfill(3)}_{str(cnt).zfill(6)}')
+                output_model = tune_name + '_model.pth'
+                output_mask = tune_name + '_mask.pth'
+                init_cnt = cnt
+                
+                cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num = self.__pruning_layer(cnt,
+                                        output.TaskTimes, 
+                                        output.TaskTimesRank,
+                                        pruning_times,
+                                        output.SubgraphTasks,
+                                        subgraph.SubgraphConv2d,
+                                        output.PruneNum, 
+                                        model_to_Prune,
+                                        output_mask,
+                                        output_model)
+                
                 model_masked = pruner.compress()
-
-                # added 0: speed_up
-                pruner.export_model('./model_masked.pth', './mask.pth')
+                
                 model = copy.deepcopy(self._original_model)
-                model.load_state_dict(torch.load('./model_masked.pth'))
-                masks_file = './mask.pth'
-                m_speedup = ModelSpeedup(model, self._dummy_input, masks_file, device)
+                model.load_state_dict(torch.load(output_model))
+                m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
                 m_speedup.speedup_model()
                 # added 1: Autotune + TVM build
                 model.eval()
                 
                 input_data = torch.randn(self._input_size).to(device)
-                pos, conv2d_subgraph_chs, conv2d_num, others_num = self._get_extract_subgraph(model)
-                pruning_times, real_pruning_times, temp_latency = optimizer_tvm.optimizing(model, 
-                                        input_data, 
-                                        self._input_size, 
-                                        self._cpu_or_gpu,
-                                        conv2d_num,
-                                        others_num,
-                                        pos,
-                                        self._acc_requirement)
-     
+                subgraph = self._get_extract_subgraph(model_to_Prune)
+                input2 = optimizer_tvm.OptimizerTVMInput()
+                input2.Model = model_to_Prune
+                input2.InputData = input_data
+                input2.InputSize = self._input_size
+                input2.DeviceType = self._cpu_or_gpu
+                input2.Subgraph = subgraph
+                input2.TVM_DeviceKey = os.getenv("ID_OPTIMIZATION_HARDWARE")
+                input2.TVM_TrackerHost = os.environ.get("TVM_TRACKER_HOST", "0.0.0.0")
+                input2.TVM_TrackerPort = int(os.environ["TVM_TRACKER_PORT"])
+                
+                output2 = optimizer_tvm.optimizing(input, tune_name)
+                
+                ch_num = int(subgraph.SubgraphConv2d[output.TaskTimesRank[init_cnt]] * (1 - target_op_sparsity))
                 #################################################
-                logger.info('Subgraph: {}, Temp latency: {:>8.4f}, Total estimated latency: {:>8.4f}, Channel: {:4d}, Next trials: {:4d}'.format(wrapper.name, temp_latency, total_estimated_latency, ch_num, tune_trials))
-                # file_object = open('./record_tvm.txt', 'a')
-                logger.info('Subgraph: {}, Temp latency: {:>8.4f}, Total estimated latency: {:>8.4f}, Channel: {:4d}, Next trials: {:4d}\n'.format(wrapper.name, temp_latency, total_estimated_latency, ch_num, tune_trials))
-                # file_object.close()
+                logger.info('Subgraph: {}, Temp latency: {:>8.4f}, Total estimated latency: {:>8.4f}, Channel: {:4d}, Next trials: {:4d}'
+                            .format(wrapper.name, 
+                                    output2.CurrentLatency.mean(), # temp_latency, 
+                                    output2.TotalEstimatedLatency, 
+                                    ch_num, 
+                                    output2.TuneTrials))
+                temp_latency = output2.CurrentLatency.mean()
                 ################# Added part to prune the slow subgraph quickly ##################
                 if temp_latency > target_latency:
                     # ('./record_tvm.txt', 'a')
                     logger.info('Higher than target latency! Pruning_ratio of Subgraph {} increases one time more!\n'.format(wrapper.name))
                     # file_object.close()
                 ###############################################################################
-
+                temp_latency = target_latency - 0.01
                 if temp_latency <= target_latency:
-                    logger.info('./train_epoch.txt', 'a')
                     logger.info('Subgraph: {}, Temp latency: {:>8.4f}, Channel: {:4d}\n'.format(wrapper.name, temp_latency, ch_num))
                     # file_object.close()
                     # Short-term fine tune the pruned model
                     optimizer = torch.optim.SGD(model_masked.parameters(), lr=0.0001, momentum=0.9, weight_decay=5e-4)                    
                     best_acc = 0
-                    
                     best_acc_5 = 0
-                    short_num = 5 # Training Epoch
+                    
+                    short_num = 1 # Training Epoch
                     
                     for epoch in range(short_num):
                         self._short_term_trainer(model_masked, optimizer, epochs=epoch)
@@ -360,6 +395,7 @@ class CPruner(Pruner):
                             best_acc_5 = acc_5
                         if acc > best_acc:
                             best_acc = acc
+
                     print('Subgraph: {}, Short_tune - Top-1 Accuracy: {:>8.5f}, Top-5 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc, best_acc_5))
                     logger.info('Subgraph: {}, Top-1 Accuracy: {:>8.5f}, Top-5 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc, best_acc_5))
                     ################ Added part to avoid excessive accuracy decrement ###############
@@ -367,12 +403,12 @@ class CPruner(Pruner):
                     temp_acc = best_acc_5
                     if temp_acc < alpha * current_accuracy: 
                         logger.info('Too low short-term accuracy! Improper subgraph: {}\n'.format(wrapper.name))
-                        for wrapper_idx in task_times_rank[init_cnt: init_cnt + overlap_num]:
+                        for wrapper_idx in output2.TaskTimesRank[init_cnt: init_cnt + overlap_num]:
                             pruning_times[wrapper_idx] = 1
                         continue
                     #################################################################################
 
-                    for wrapper_idx in task_times_rank[init_cnt: init_cnt + overlap_num]:
+                    for wrapper_idx in output.TaskTimesRank[init_cnt: init_cnt + overlap_num]:
                         real_pruning_times[wrapper_idx] = pruning_times[wrapper_idx]
                     pass_target_latency = 1
                     # find weight mask of this subgraph
@@ -392,24 +428,25 @@ class CPruner(Pruner):
                     }
 
                     current_latency = temp_latency
-                    prev_task_times_rank = task_times_rank
+                    prev_task_times_rank = output.TaskTimesRank
 
-                    # save model weights
-                    pruner.export_model(self._tmp_model_path, './tmp_mask.pth')
-                    subgraph_tasks = subgraph_tasks_temp
-                    task_times = task_times_temp
-                    task_times_rank = task_times_rank_temp
-                    
+                    # save model weights after train
+                    subgraph_tasks = output2.SubgraphTasks
+                    task_times =  output2.TaskTimes
+                    output.TaskTimesRank = output2.TaskTimesRank
+                    with open(tune_name + '_best_op.pkl', 'wb') as f:
+                        pickle.dump(best_op, f)
+                    pruner.export_model(output_model, output_mask)
                     logger.info('=============== task_times ===============\n')
                     logger.info(str(task_times))
                     logger.info('\n')
-                    logger.info(str(task_times_rank))
+                    logger.info(str(output.TaskTimesRank))
                     logger.info('\n')
-                    logger.info(str(np.argsort(task_times_rank) + 1))
+                    logger.info(str(np.argsort(output.TaskTimesRank) + 1))
                     logger.info('\n\n')
                     break
                 else:
-                    time.sleep(250)
+                    time.sleep(0.01)
 
             # Check the minimum accuracy requirement
             if alpha * best_op['performance'] < minimum_acc_requirement:
@@ -428,7 +465,7 @@ class CPruner(Pruner):
                         setattr(wrapper, k, masks[k])
 
                 # update weights parameters
-                self._model_to_prune.load_state_dict(torch.load(self._tmp_model_path))
+                model_to_Prune.load_state_dict(torch.load(output_model))
                 logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f}'.format(budget, best_op['latency']))
                 logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f} \n'.format(budget, best_op['latency']))
 
@@ -438,6 +475,11 @@ class CPruner(Pruner):
             pruning_iteration += 1
 
         # load weights parameters
-        self.load_model_state_dict(torch.load(self._tmp_model_path))
+        self.load_model_state_dict(torch.load(output_model))
 
-        return self._model_to_prune
+        model = copy.deepcopy(self._original_model)
+        model.load_state_dict(torch.load(output_model))
+        m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
+        m_speedup.speedup_model()
+        
+        return model
