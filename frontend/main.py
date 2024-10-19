@@ -19,7 +19,8 @@ def main(args):
     torch.manual_seed(42)
 
     # For Training
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device('cpu')
     train_loader, val_loader, criterion = get_data_dataset(args.dataset, args.data_dir, args.batch_size, args.test_batch_size)
     model = LeNet().to(device)
     
@@ -31,15 +32,24 @@ def main(args):
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9, weight_decay=5e-4)
     
     def short_term_trainer(model, optimizer=optimizer, epochs=1):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
         for e in range(epochs):
             train(args, model, device, train_loader, criterion, optimizer, e)
-
+        model = model.to(torch.device('cpu'))
     def evaluator(model):
-        return test(model, device, criterion, val_loader)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        result = test(model, device, criterion, val_loader)
+        model = model.to(torch.device('cpu'))
+        return result
 
     def evaluator_top1(model):
-        return test_top1(model, device, criterion, val_loader)
-    
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        result = test_top1(model, device, criterion, val_loader)
+        model = model.to(torch.device('cpu'))
+        return result
     # If you need a training model.
     file_name = os.path.join(args.experiment_data_dir, f'{args.model}.pth')
     if os.path.exists(file_name):
@@ -88,7 +98,7 @@ def main(args):
     
     # # Pruner.compress() returns the masked model
     model = pruner.compress()
-
+    
     # model speed up
     if args.speed_up:
         model.load_state_dict(torch.load('/work/experiments/mnist_lenet/tvm/001_000000_model.pth'))
@@ -130,5 +140,29 @@ if __name__ == '__main__':
     speed_up=True
     )
     main(args)
+
+# %%
+import torch
+from utils import *
+from models.implements.cnn.mnist import LeNet
+from nni.compression.pytorch import ModelSpeedup
+
+model = LeNet()
+input_size = get_input_size('mnist')
+dummy_input = get_dummy_input(input_size, 1)
+model.load_state_dict(torch.load('/work/experiments/mnist_lenet/tvm/006_000000_model.pth'))
+masks_file = '/work/experiments/mnist_lenet/tvm/006_000000_mask.pth'
+m_speedup = ModelSpeedup(model, dummy_input, masks_file, torch.device('cpu'))
+m_speedup.speedup_model()
+
+torch.onnx.export(model,         # model being run 
+        dummy_input,       # model input (or a tuple for multiple inputs) 
+        "6.onnx",       # where to save the model  
+        export_params=True,  # store the trained parameter weights inside the model file 
+        opset_version=12,    # the ONNX version to export the model to 
+        do_constant_folding=True,  # whether to execute constant folding for optimization 
+        input_names = ['input0'],   # the model's input names 
+        output_names = ['output0'], # the model's output names 
+        ) 
 
 # %%

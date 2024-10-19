@@ -34,6 +34,12 @@ from cpruner import Logger
 logger = Logger().get_logger()
 ###########################################################
 
+def safe_int(value):
+    try:
+        return int(value)
+    except ValueError:
+        return None  # 혹은 원하는 값을 반환
+    
 class CPruner(Pruner):
     '''
     Pruning the pre-trained model by utilizing measured latency from executable tuning
@@ -219,7 +225,6 @@ class CPruner(Pruner):
         logger.info('Subgraph: ' + wrapper.name + ', overlap_num: ' + str(overlap_num) + ', ch_num: ' + str(ch_num) + '\n')
         logger.info('Temp_pruning_times:' + str(pruning_times) + '\n')
         # file_object.close()
-        
         pruner = PRUNER_DICT[self._base_algo](copy.deepcopy(model), config_list, dependency_aware=True, dummy_input=self._dummy_input)
         if not (os.path.exists(output_mask) or os.path.exists(output_mask)):
             # added 0: speed_up
@@ -235,7 +240,7 @@ class CPruner(Pruner):
         -------
         torch.nn.Module : the final pruned model
         """
-        device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cpu')
         # target = "llvm -mtriple=%s-linux-android" % arch        
         # target = "llvm -mtriple=%s-linux-none" % arch
         use_android = False
@@ -290,6 +295,22 @@ class CPruner(Pruner):
         target_latency = current_latency.mean() * beta
         output_model = ""
         output_mask = ""
+        
+        pruning_iteration, output_name = self._get_last_epoch()
+        if pruning_iteration != 0:
+            tune_name = os.path.join(self._experiment_data_dir, 'tvm', output_name)
+            with open(tune_name + '_config.pkl', 'rb') as f:
+                self._config_list_generated = pickle.load(f) # 단 한줄씩 읽어옴
+            with open(tune_name + '_pruner.pkl', 'wb') as f:
+                PRUNER_DICT = pickle.load(f)
+                        
+            output_model = tune_name + "_model.pth"
+            output_mask = tune_name + "_mask.pth"
+            model_to_Prune.load_state_dict(torch.load(output_model))
+            # self.load_model_state_dict(torch.load(output_model))
+            
+        pruning_iteration += 1
+        
         # stop condition
         while pruning_iteration < max_iter and current_latency > budget:
             # Print the message
@@ -436,6 +457,13 @@ class CPruner(Pruner):
                     output.TaskTimesRank = output2.TaskTimesRank
                     with open(tune_name + '_best_op.pkl', 'wb') as f:
                         pickle.dump(best_op, f)
+                        
+                    with open(tune_name + '_config.pkl', 'wb') as f:
+                        pickle.dump(self._config_list_generated, f)
+                        # PRUNER_DICT
+                    with open(tune_name + '_pruner.pkl', 'wb') as f:
+                        pickle.dump(PRUNER_DICT, f)
+                        
                     pruner.export_model(output_model, output_mask)
                     logger.info('=============== task_times ===============\n')
                     logger.info(str(task_times))
@@ -478,8 +506,35 @@ class CPruner(Pruner):
         self.load_model_state_dict(torch.load(output_model))
 
         model = copy.deepcopy(self._original_model)
-        model.load_state_dict(torch.load(output_model))
-        m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
-        m_speedup.speedup_model()
+        # model.load_state_dict(torch.load(output_model))
+        # m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
+        # m_speedup.speedup_model()
+        
+        
         
         return model
+    def _get_latest_iter(self):
+        dirs = os.path.join(self._experiment_data_dir, 'tvm')
+        dirs = os.listdir(dirs)
+        pk = list(filter(lambda x: x[-3:] == 'pkl', dirs))
+        pk = list(filter(lambda x: safe_int(x.split('_')[0]), pk))
+        pk = list(filter(lambda x: x.split('_')[-1] == 'op.pkl', pk))
+        pk = list(map(lambda x: x.split("_")[0], pk))
+
+        if len(pk) == 0:
+            return 0
+        else:
+            pk_max = max(list(map(lambda x: int(x), pk)))
+            return pk_max
+
+    def _get_last_epoch(self):
+        pk_max = self._get_latest_iter()
+        if pk_max == 0:
+            return 0, None
+        
+        iter = str(pk_max).zfill(3)
+        dirs = os.path.join(self._experiment_data_dir, 'tvm')
+        dirs = os.listdir(dirs)
+        dd = list(filter(lambda x: x[:3] == iter, dirs))
+        epoch = dd[0].split('.')[0].split('_')[:2]
+        return pk_max, '_'.join(epoch)
