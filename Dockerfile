@@ -44,7 +44,7 @@ COPY setup.sh setup.sh
 RUN echo 'export PATH=/opt/conda/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH' >> /root/.bashrc
 RUN apt install git make zlib1g-dev
 
-# RUN ./setup.sh
+RUN ./setup.sh
 
 
 CMD ["/usr/sbin/sshd", "-D"]
