@@ -1,7 +1,8 @@
 # FROM python:3.12.6-bookworm
 # FROM python:3.8.17-buster
 # FROM nvcr.io/nvidia/pytorch:22.10-py3
-FROM nvcr.io/nvidia/cuda:12.6.2-base-ubuntu20.04
+# FROM nvcr.io/nvidia/cuda:11.1-base-ubuntu20.04
+FROM nvcr.io/nvidia/pytorch:21.02-py3
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
@@ -36,13 +37,14 @@ RUN apt install -y lsb-release wget software-properties-common gnupg libzstd-dev
 RUN apt install -y curl wget python3.8 python3.8-distutils && \
         curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
         python3.8 get-pip.py && \
-        
+        git config --global user.email "chacha@udon.party" && \
+        git config --global user.name "Piorosen"
         
 COPY setup.sh setup.sh 
-# RUN echo 'export PATH=/opt/conda/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH' >> /root/.bashrc && source ~/.bashrc
+RUN echo 'export PATH=/opt/conda/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH' >> /root/.bashrc
+RUN apt install git make zlib1g-dev
+
 # RUN ./setup.sh
 
-# RUN git config --global user.email "chacha@udon.party" && \
-#     git config --global user.name "Piorosen"
 
 CMD ["/usr/sbin/sshd", "-D"]

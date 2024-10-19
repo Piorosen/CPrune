@@ -1,13 +1,13 @@
 .PHONY: build run
 
 build:
-	sudo docker build -t chacha/cprune:3.8 .
+	sudo docker build -t chacha/cprune:3.8-cuda .
 
 run: 
-	sudo docker run --gpus all -p 5911:5911 -d -v $(shell pwd):/work chacha/cprune:3.8
+	sudo docker run --gpus all -p 5911:5911 -d -v $(shell pwd):/work chacha/cprune:3.8-cuda
 
 it:
-	sudo docker run --gpus all --rm -it -v $(shell pwd):/work chacha/cprune:3.8 /bin/bash
+	sudo docker run --gpus all --rm -it -v $(shell pwd):/work chacha/cprune:3.8-cuda /bin/bash
 
 # bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 
