@@ -460,9 +460,6 @@ class CPruner(Pruner):
                         
                     with open(tune_name + '_config.pkl', 'wb') as f:
                         pickle.dump(self._config_list_generated, f)
-                        # PRUNER_DICT
-                    with open(tune_name + '_pruner.pkl', 'wb') as f:
-                        pickle.dump(PRUNER_DICT, f)
                         
                     pruner.export_model(output_model, output_mask)
                     logger.info('=============== task_times ===============\n')
