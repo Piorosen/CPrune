@@ -296,20 +296,20 @@ class CPruner(Pruner):
         output_model = ""
         output_mask = ""
         
-        pruning_iteration, output_name = self._get_last_epoch()
-        if pruning_iteration != 0:
-            tune_name = os.path.join(self._experiment_data_dir, 'tvm', output_name)
-            with open(tune_name + '_config.pkl', 'rb') as f:
-                self._config_list_generated = pickle.load(f) # 단 한줄씩 읽어옴
-            with open(tune_name + '_pruner.pkl', 'wb') as f:
-                PRUNER_DICT = pickle.load(f)
+        # pruning_iteration, output_name = self._get_last_epoch()
+        # if pruning_iteration != 0:
+        #     tune_name = os.path.join(self._experiment_data_dir, 'tvm', output_name)
+        #     with open(tune_name + '_config.pkl', 'rb') as f:
+        #         self._config_list_generated = pickle.load(f) # 단 한줄씩 읽어옴
+        #     with open(tune_name + '_pruner.pkl', 'wb') as f:
+        #         PRUNER_DICT = pickle.load(f)
                         
-            output_model = tune_name + "_model.pth"
-            output_mask = tune_name + "_mask.pth"
-            model_to_Prune.load_state_dict(torch.load(output_model))
-            # self.load_model_state_dict(torch.load(output_model))
+        #     output_model = tune_name + "_model.pth"
+        #     output_mask = tune_name + "_mask.pth"
+        #     model_to_Prune.load_state_dict(torch.load(output_model))
+        #     # self.load_model_state_dict(torch.load(output_model))
             
-        pruning_iteration += 1
+        # pruning_iteration += 1
         
         # stop condition
         while pruning_iteration < max_iter and current_latency > budget:
