@@ -94,10 +94,10 @@ def optimizing(data: OptimizerTVMInput, load_log=None, at_least_trials = 20, num
             subgraph_tasks[data.Subgraph.Pos[pos_idx]] = idx
             pos_idx += 1
 
-    at_least_trials = 1 # 20
-    num_per_round = 1 # 60
-    runner_number = 1 # 10
-    runner_repeat = 1  # 2
+    # at_least_trials = 1 # 20
+    # num_per_round = 1 # 60
+    # runner_number = 1 # 10
+    # runner_repeat = 1  # 2
     tune_trials = (at_least_trials + num_per_round) * len(tasks) #(conv2d_num + others_num)        
     
     print("Begin tuning...")
