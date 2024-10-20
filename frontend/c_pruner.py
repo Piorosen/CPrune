@@ -232,7 +232,7 @@ class CPruner(Pruner):
         
         return cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num
 
-    def compress(self):
+    def compress(self, short_num=5):
         """
         Compress the model.
 
@@ -407,7 +407,7 @@ class CPruner(Pruner):
                     best_acc = 0
                     best_acc_5 = 0
                     
-                    short_num = 1 # Training Epoch
+                    # short_num = 5 # Training Epoch
                     
                     for epoch in range(short_num):
                         self._short_term_trainer(model_masked, optimizer, epochs=epoch)
@@ -452,9 +452,10 @@ class CPruner(Pruner):
                     prev_task_times_rank = output.TaskTimesRank
 
                     # save model weights after train
-                    subgraph_tasks = output2.SubgraphTasks
+                    output = output2
+                    # subgraph_tasks = output2.SubgraphTasks
                     task_times =  output2.TaskTimes
-                    output.TaskTimesRank = output2.TaskTimesRank
+                    # output.TaskTimesRank = output2.TaskTimesRank
                     with open(tune_name + '_best_op.pkl', 'wb') as f:
                         pickle.dump(best_op, f)
                         

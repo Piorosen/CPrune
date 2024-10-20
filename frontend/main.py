@@ -97,16 +97,16 @@ def main(args):
                      acc_requirement=acc_requirement)
     
     # # Pruner.compress() returns the masked model
-    model = pruner.compress()
+    model = pruner.compress(short_num=5)
     
-    # model speed up
-    if args.speed_up:
-        model.load_state_dict(torch.load('/work/experiments/mnist_lenet/tvm/001_000000_model.pth'))
-        masks_file = '/work/experiments/mnist_lenet/tvm/001_000000_mask.pth'
-        m_speedup = ModelSpeedup(model, dummy_input, masks_file, device)
-        m_speedup.speedup_model()
+    # # model speed up
+    # if args.speed_up:
+    #     model.load_state_dict(torch.load('/work/experiments/mnist_lenet/tvm/001_000000_model.pth'))
+    #     masks_file = '/work/experiments/mnist_lenet/tvm/001_000000_mask.pth'
+    #     m_speedup = ModelSpeedup(model, dummy_input, masks_file, device)
+    #     m_speedup.speedup_model()
 
-    model.eval() 
+    # model.eval() 
     # torch.onnx.export(model,         # model being run 
     #      dummy_input,       # model input (or a tuple for multiple inputs) 
     #      "LeNet.onnx",       # where to save the model  
@@ -117,7 +117,7 @@ def main(args):
     #      output_names = ['output0'], # the model's output names 
     #      ) 
     
-    export_model('./export')
+    # export_model('./export')
  #%%
 from types import SimpleNamespace
  
