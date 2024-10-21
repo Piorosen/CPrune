@@ -45,7 +45,7 @@ function install() {
     fi
 
     make runtime -j$half
-    python3 -m pip install -e $(pwd)/tvm-runtime/python
+    python3 -m pip install -e $(pwd)/python
 }
 
 if [ "$1" == "install" ]; then
