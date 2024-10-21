@@ -135,7 +135,7 @@ def test(model, device, criterion, val_loader):
 
     print(' * Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f}'
           .format(top1=metric_logger.acc1, top5=metric_logger.acc5))
-    return metric_logger.acc1.global_avg, metric_logger.acc5.global_avg
+    return metric_logger
 
 def is_dist_avail_and_initialized():
     if not dist.is_available():

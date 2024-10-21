@@ -59,6 +59,8 @@ def main(args):
         short_term_trainer(model, epochs=100)
         torch.save(model.state_dict(), file_name)
     
+    
+    
     # ImageNet
     if args.dataset == 'imagenet':
         # ResNet-18
@@ -68,6 +70,7 @@ def main(args):
         #accuracy = 0.73456
         #accuracy_5 = 0.91510
         #accuracy, accuracy_5 = evaluator(model)
+        
         print('Original model - Top-1 Accuracy: %s, Top-5 Accuracy: %s' %(accuracy, accuracy_5))
     # CIFAR-10
     elif args.dataset == 'cifar10' or args.dataset == 'mnist':
@@ -164,5 +167,37 @@ torch.onnx.export(model,         # model being run
         input_names = ['input0'],   # the model's input names 
         output_names = ['output0'], # the model's output names 
         ) 
+
+# %%
+from dotenv import load_dotenv
+import torch
+from models.implements import get_model_zoo
+from utils import *
+
+def evaluator(model):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    acc1, acc5 = test(model, device, criterion, val_loader)
+    model = model.to(torch.device('cpu'))
+    return acc1, acc5
+# %%
+model, pth = get_model_zoo()['alexnet']
+model = model(True)
+
+torch.manual_seed(42)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+train_loader, val_loader, criterion = get_data_dataset('imagenet', '/work/dataset', 512, 64)
+
+# %%
+acc1, acc5 = evaluator(model)
+print(acc1, acc5)
+
+# %%
+
+#%%
+val_loader[0]
+# %%
+
+# %%
 
 # %%
