@@ -49,9 +49,11 @@ function install() {
 }
 
 if [ "$1" == "install" ]; then
+    shift 1
     install
     exit
 elif  [ "$1" == "exec" ]; then
+    shift 1
     execute $@
     exit
 fi
