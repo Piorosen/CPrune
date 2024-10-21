@@ -11,7 +11,7 @@ import torch.distributed as dist
 #%%
 def get_data_dataset(dataset, data_dir, batch_size, test_batch_size):
     # kwargs = {'num_workers': 32+8, 'pin_memory': True} if torch.cuda.is_available() else {
-    kwargs = {'num_workers': 16, 'pin_memory': True, 'prefetch_factor': 4} if torch.cuda.is_available() else {
+    kwargs = {'num_workers': 16, 'pin_memory': True, 'prefetch_factor': 2} if torch.cuda.is_available() else {
     }
     
     if dataset == 'cifar10':
@@ -210,6 +210,7 @@ class SmoothedValue(object):
 
 class MetricLogger(object):
     def __init__(self, delimiter="\t"):
+        self.output = []
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
 
@@ -280,21 +281,25 @@ class MetricLogger(object):
                 eta_seconds = iter_time.global_avg * (len(iterable) - i)
                 eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
                 if torch.cuda.is_available():
-                    print(log_msg.format(
+                    output = log_msg.format(
                         i, len(iterable), eta=eta_string,
                         meters=str(self),
                         time=str(iter_time), data=str(data_time),
-                        memory=torch.cuda.max_memory_allocated() / MB))
+                        memory=torch.cuda.max_memory_allocated() / MB)
                 else:
-                    print(log_msg.format(
+                    output = log_msg.format(
                         i, len(iterable), eta=eta_string,
                         meters=str(self),
-                        time=str(iter_time), data=str(data_time)))
+                        time=str(iter_time), data=str(data_time))
+                print(output)
+                self.output.append(output)
             i += 1
             end = time.time()
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print('{} Total time: {}'.format(header, total_time_str))
+        result = '{} Total time: {}'.format(header, total_time_str)
+        print(result)
+        self.output.append(result)
         
 # Only top-1 accuracy test (CIFAR-10)
 def test_top1(model, device, criterion, val_loader):

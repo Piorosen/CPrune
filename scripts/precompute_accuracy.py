@@ -47,8 +47,8 @@ def execute(model, name, device, args):
     start = time.time()
     metric_logger = test(model, device, criterion, val_loader)
     end = time.time() - start
-    with open(f'{name}_{end}', 'wb') as f:
-        pickle.dump([metric_logger, end, name, 'imagenet', device], f)
+    with open(os.path.join(args.output, f'{name}_{end}.pkl'), 'wb') as f:
+        pickle.dump([metric_logger.output, end, name, 'imagenet', device], f)
     return True
 
 def main():
@@ -87,5 +87,13 @@ def main():
         
 if __name__ == "__main__":
     main()
+
+# %%
+
+# %%
+
+# %%
+
+# %%
 
 # %%
