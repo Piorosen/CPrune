@@ -25,3 +25,7 @@
 4. VOC (if have a time.)
 5. COCO (if have a time.)
 ```
+
+```sh
+$ curl -fsSL https://raw.githubusercontent.com/Piorosen/CPrune/refs/heads/dev/chacha/scripts/tvm_runtime.sh | sh
+```
