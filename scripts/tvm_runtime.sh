@@ -23,4 +23,5 @@ if [ "$half" -lt 1 ]; then
 fi
 
 make runtime -j$half
-python3 -m pip install -e $(pwd)/tvm-runtime/python
+python3 -m pip install -e $(pwd)/python
+cd ..
