@@ -4,7 +4,7 @@ build:
 	sudo docker build -t chacha/cprune:3.8-cuda .
 
 run: 
-	sudo docker run --gpus all --shm-size=64G  -p 5911:5911 -d -v $(shell pwd):/work chacha/cprune:3.8-cuda
+	sudo docker run --gpus all --shm-size=64G --network=host -d -v $(shell pwd):/work chacha/cprune:3.8-cuda
 
 it:
 	sudo docker run --gpus all --rm --shm-size=64G -it -v $(shell pwd):/work chacha/cprune:3.8-cuda /bin/bash

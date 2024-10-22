@@ -10,26 +10,25 @@ git config --global --add safe.directory /work/3rdparty/tvm/3rdparty/libbacktrac
 git config --global --add safe.directory /work/3rdparty/tvm/3rdparty/rang
 git config --global --add safe.directory /work/3rdparty/tvm/3rdparty/vta-hw
 
-git submodule init && git submodule update && \
-   git submodule foreach git submodule update --init --recursive
-
-cd /work/3rdparty/tvm && \
-   rm -rf build && mkdir build && cd build && \
-   cp ../cmake/config.cmake . && \
-   echo "set(CMAKE_BUILD_TYPE RELEASE)" >> config.cmake && \
-   echo "set(USE_CUDA   OFF)" >> config.cmake && \
-   echo "set(USE_METAL  OFF)" >> config.cmake && \
-   echo "set(USE_VULKAN OFF)" >> config.cmake && \
-   echo "set(USE_OPENCL OFF)" >> config.cmake && \
-   echo "set(USE_CUBLAS OFF)" >> config.cmake && \
-   echo "set(USE_CUDNN  OFF)" >> config.cmake && \
-   echo "set(USE_CUTLASS OFF)" >> config.cmake && \
-   echo "set(USE_LLVM \"llvm-config-12 --ignore-libllvm --link-static\")" >> config.cmake && \
-   echo "set(HIDE_PRIVATE_SYMBOLS ON)" >> config.cmake && \
-   echo "set(CMAKE_C_COMPILER /usr/bin/clang-12)" >> config.cmake && \
-   echo "set(CMAKE_CXX_COMPILER /usr/bin/clang++-12)" >> config.cmake && \
-   CC=/usr/bin/clang-12 CXX=/usr/bin/clang++-12 \
-   cmake .. && cmake --build . --parallel $(nproc)
+# git submodule init && git submodule update && \
+#    git submodule foreach git submodule update --init --recursive
+# cd /work/3rdparty/tvm && \
+#    rm -rf build && mkdir build && cd build && \
+#    cp ../cmake/config.cmake . && \
+#    echo "set(CMAKE_BUILD_TYPE RELEASE)" >> config.cmake && \
+#    echo "set(USE_CUDA   OFF)" >> config.cmake && \
+#    echo "set(USE_METAL  OFF)" >> config.cmake && \
+#    echo "set(USE_VULKAN OFF)" >> config.cmake && \
+#    echo "set(USE_OPENCL OFF)" >> config.cmake && \
+#    echo "set(USE_CUBLAS OFF)" >> config.cmake && \
+#    echo "set(USE_CUDNN  OFF)" >> config.cmake && \
+#    echo "set(USE_CUTLASS OFF)" >> config.cmake && \
+#    echo "set(USE_LLVM \"llvm-config-12 --ignore-libllvm --link-static\")" >> config.cmake && \
+#    echo "set(HIDE_PRIVATE_SYMBOLS ON)" >> config.cmake && \
+#    echo "set(CMAKE_C_COMPILER /usr/bin/clang-12)" >> config.cmake && \
+#    echo "set(CMAKE_CXX_COMPILER /usr/bin/clang++-12)" >> config.cmake && \
+#    CC=/usr/bin/clang-12 CXX=/usr/bin/clang++-12 \
+#    cmake .. && cmake --build . --parallel $(nproc)
 
 echo 'export TVM_HOME=/work/3rdparty/tvm' >> ~/.bashrc && \
 echo 'export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH' >> ~/.bashrc && \

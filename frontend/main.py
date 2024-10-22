@@ -10,6 +10,7 @@ from nni.compression.pytorch import ModelSpeedup
 
 from cpruner import Logger, DeviceType
 from utils import *
+from models.implements import get_model_zoo
 from models.implements.cnn.mnist import LeNet
 logger = Logger()
 
@@ -50,16 +51,20 @@ def main(args):
         result = test_top1(model, device, criterion, val_loader)
         model = model.to(torch.device('cpu'))
         return result
-    # If you need a training model.
-    file_name = os.path.join(args.experiment_data_dir, f'{args.model}.pth')
-    if os.path.exists(file_name):
-        model.load_state_dict(torch.load(file_name))
-    else:
-        os.makedirs(args.experiment_data_dir, exist_ok=True)
-        short_term_trainer(model, epochs=100)
-        torch.save(model.state_dict(), file_name)
     
+    models = get_model_zoo()
+    model, file_name = models[args.model]
+    model = model(True, True)
+    os.makedirs(args.experiment_data_dir, exist_ok=True)
     
+    # # If you need a training model.
+    # # file_name = os.path.join(args.experiment_data_dir, f'{args.model}.pth')
+    # if os.path.exists(file_name):
+    #     model.load_state_dict(torch.load(file_name))
+    # else:
+        # os.makedirs(args.experiment_data_dir, exist_ok=True)
+    #     short_term_trainer(model, epochs=100)
+    #     torch.save(model.state_dict(), file_name)
     
     # ImageNet
     if args.dataset == 'imagenet':
@@ -68,14 +73,13 @@ def main(args):
         accuracy_5 = 0.89078
         ## MnasNet1_0
         #accuracy = 0.73456
-        #accuracy_5 = 0.91510
-        #accuracy, accuracy_5 = evaluator(model)
-        
+        # accuracy_5 = 0.91510
+        # accuracy, accuracy_5 = evaluator(model)
         print('Original model - Top-1 Accuracy: %s, Top-5 Accuracy: %s' %(accuracy, accuracy_5))
     # CIFAR-10
     elif args.dataset == 'cifar10' or args.dataset == 'mnist':
         # pass
-        _, accuracy = evaluator_top1(model)
+        # _, accuracy = evaluator_top1(model)
         print('Original model - Top-1 Accuracy: %s' %(accuracy))
         
     # module types to prune, only "Conv2d" supported for channel pruning
@@ -100,7 +104,7 @@ def main(args):
                      acc_requirement=acc_requirement)
     
     # # Pruner.compress() returns the masked model
-    model = pruner.compress(short_num=5)
+    model = pruner.compress(short_num=args.fine_tune_epochs)
     
     # # model speed up
     # if args.speed_up:
@@ -121,28 +125,30 @@ def main(args):
     #      ) 
     
     # export_model('./export')
- #%%
+# %%
+
 from types import SimpleNamespace
  
 if __name__ == '__main__':
-    
     load_dotenv()
     args = SimpleNamespace(
     accuracy_requirement=0.85,
-    dataset='mnist',
+    dataset='imagenet',
     data_dir='/work/dataset',
-    model='LeNet',
+    model='resnet18',
     batch_size=512,
-    test_batch_size=1,  # 64
+    test_batch_size=128,  # 64
     fine_tune=True,
-    fine_tune_epochs=3,
-    experiment_data_dir='/work/experiments/mnist_lenet',
+    fine_tune_epochs=1,
+    experiment_data_dir='/work/experiments/imagenet_resnet18',
     base_algo='l1',
     sparsity=0.1,
     log_interval=1000,  # 200
     speed_up=True
     )
     main(args)
+
+# %%
 
 # %%
 import torch

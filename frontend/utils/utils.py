@@ -55,7 +55,7 @@ def get_data_dataset(dataset, data_dir, batch_size, test_batch_size):
     
     elif dataset == 'mnist':
         train_loader = torch.utils.data.DataLoader(
-            datasets.MNIST(os.path.join(data_dir, 'mnist'), train=True, transform=transforms.Compose([
+            datasets.MNIST(os.path.join(data_dir), train=True, transform=transforms.Compose([
                 transforms.Grayscale(num_output_channels=1), 
                 transforms.RandomHorizontalFlip(),
                 transforms.Resize(28),
@@ -64,7 +64,7 @@ def get_data_dataset(dataset, data_dir, batch_size, test_batch_size):
             batch_size=batch_size, shuffle=True, **kwargs)
 
         val_loader = torch.utils.data.DataLoader(
-            datasets.MNIST(os.path.join(data_dir, 'mnist'), train=False, transform=transforms.Compose([
+            datasets.MNIST(os.path.join(data_dir), train=False, transform=transforms.Compose([
                 transforms.Grayscale(num_output_channels=1), 
                 transforms.Resize(28),
                 transforms.ToTensor(),
