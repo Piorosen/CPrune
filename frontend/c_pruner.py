@@ -454,8 +454,8 @@ class CPruner(Pruner):
                     # save model weights after train
                     output = output2
                     # subgraph_tasks = output2.SubgraphTasks
-                    task_times =  output2.TaskTimes
                     # output.TaskTimesRank = output2.TaskTimesRank
+                    task_times =  output2.TaskTimes
                     with open(tune_name + '_best_op.pkl', 'wb') as f:
                         pickle.dump(best_op, f)
                         
@@ -472,7 +472,7 @@ class CPruner(Pruner):
                     logger.info('\n\n')
                     break
                 else:
-                    time.sleep(0.01)
+                    time.sleep(10)
 
             # Check the minimum accuracy requirement
             if alpha * best_op['performance'] < minimum_acc_requirement:
