@@ -1,13 +1,13 @@
 .PHONY: build run
 
 build:
-	sudo docker build -t chacha/cprune:3.8-cuda .
+	docker build -t chacha/cprune:3.8-cuda .
 
 run: 
-	sudo docker run --gpus all --shm-size=64G --network=host -d -v $(shell pwd):/work chacha/cprune:3.8-cuda
+	docker run --gpus all --shm-size=250G --network=host -d -v $(shell pwd):/work chacha/cprune:3.8-cuda
 
 it:
-	sudo docker run --gpus all --rm --shm-size=64G -it -v $(shell pwd):/work chacha/cprune:3.8-cuda /bin/bash
+	docker run --gpus all --rm --shm-size=250G -it -v $(shell pwd):/work chacha/cprune:3.8-cuda /bin/bash
 
 # bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 

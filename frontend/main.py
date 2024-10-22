@@ -23,9 +23,14 @@ def main(args):
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device('cpu')
     train_loader, val_loader, criterion = get_data_dataset(args.dataset, args.data_dir, args.batch_size, args.test_batch_size)
-    model = LeNet().to(device)
-    
+    # model = LeNet().to(device)
     # model = models.resnet18(pretrained=True).to(device)
+    
+    models = get_model_zoo()
+    model, file_name = models[args.model]
+    model = model(True, True)
+    os.makedirs(args.experiment_data_dir, exist_ok=True)
+    
 
     input_size = get_input_size(args.dataset)
     dummy_input = get_dummy_input(input_size, args.batch_size).to(device)
@@ -52,10 +57,6 @@ def main(args):
         model = model.to(torch.device('cpu'))
         return result
     
-    models = get_model_zoo()
-    model, file_name = models[args.model]
-    model = model(True, True)
-    os.makedirs(args.experiment_data_dir, exist_ok=True)
     
     # # If you need a training model.
     # # file_name = os.path.join(args.experiment_data_dir, f'{args.model}.pth')
@@ -123,7 +124,6 @@ def main(args):
     #      input_names = ['input0'],   # the model's input names 
     #      output_names = ['output0'], # the model's output names 
     #      ) 
-    
     # export_model('./export')
 # %%
 
@@ -136,7 +136,7 @@ if __name__ == '__main__':
     dataset='imagenet',
     data_dir='/work/dataset',
     model='resnet18',
-    batch_size=512,
+    batch_size=128,
     test_batch_size=128,  # 64
     fine_tune=True,
     fine_tune_epochs=1,
@@ -144,7 +144,7 @@ if __name__ == '__main__':
     base_algo='l1',
     sparsity=0.1,
     log_interval=1000,  # 200
-    speed_up=True
+    speed_up=True,
     )
     main(args)
 

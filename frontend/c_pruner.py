@@ -226,11 +226,13 @@ class CPruner(Pruner):
         logger.info('Temp_pruning_times:' + str(pruning_times) + '\n')
         # file_object.close()
         pruner = PRUNER_DICT[self._base_algo](copy.deepcopy(model), config_list, dependency_aware=True, dummy_input=self._dummy_input)
-        if not (os.path.exists(output_mask) or os.path.exists(output_mask)):
-            # added 0: speed_up
-            pruner.export_model(output_model, output_mask)
+        model_masked = pruner.compress()
         
-        return cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num
+        # if not (os.path.exists(output_mask) or os.path.exists(output_mask)):
+            # added 0: speed_up
+        pruner.export_model(output_model, output_mask)
+        
+        return cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked
 
     def compress(self, short_num=5):
         """
@@ -289,7 +291,17 @@ class CPruner(Pruner):
         
         # setting default value. so initailize value of default before tunning.
         # Compute Accuracy for what?, Not yet prunned.
-        _, current_accuracy = self._evaluator(model_to_Prune)
+        # tune_name = os.path.join(self._experiment_data_dir, 'tvm', f'{str(pruning_iteration).zfill(3)}_{str(cnt).zfill(6)}')
+        file_namess = os.path.join(self._experiment_data_dir, 'tvm', 'baseline_eval.pkl')
+        _, current_accuracy = None, None
+        if os.path.exists(file_namess):
+            with open(file_namess, 'rb') as f:
+                _, current_accuracy = pickle.load(f)
+        else:
+            top1, current_accuracy = self._evaluator(model_to_Prune)
+            with open(file_namess, 'wb') as f:
+                pickle.dump([top1, current_accuracy], f)
+                
         # for what target latency?
         current_latency = output.CurrentLatency.mean()
         target_latency = current_latency.mean() * beta
@@ -349,7 +361,7 @@ class CPruner(Pruner):
                 output_mask = tune_name + '_mask.pth'
                 init_cnt = cnt
                 
-                cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num = self.__pruning_layer(cnt,
+                cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked = self.__pruning_layer(cnt,
                                         output.TaskTimes, 
                                         output.TaskTimesRank,
                                         pruning_times,
@@ -360,8 +372,6 @@ class CPruner(Pruner):
                                         output_mask,
                                         output_model)
                 
-                model_masked = pruner.compress()
-                
                 model = copy.deepcopy(self._original_model)
                 model.load_state_dict(torch.load(output_model))
                 m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
@@ -370,9 +380,9 @@ class CPruner(Pruner):
                 model.eval()
                 
                 input_data = torch.randn(self._input_size).to(device)
-                subgraph = self._get_extract_subgraph(model_to_Prune)
+                subgraph = self._get_extract_subgraph(model)
                 input2 = optimizer_tvm.OptimizerTVMInput()
-                input2.Model = model_to_Prune
+                input2.Model = model
                 input2.InputData = input_data
                 input2.InputSize = self._input_size
                 input2.DeviceType = self._cpu_or_gpu
