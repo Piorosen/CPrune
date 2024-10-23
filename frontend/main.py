@@ -7,6 +7,7 @@ import torch.utils.data
 import torchvision.models as models
 from c_pruner import CPruner
 from nni.compression.pytorch import ModelSpeedup
+import pickle
 
 from cpruner import Logger, DeviceType
 from utils import *
@@ -43,12 +44,21 @@ def main(args):
         for e in range(epochs):
             train(args, model, device, train_loader, criterion, optimizer, e)
         model = model.to(torch.device('cpu'))
-    def evaluator(model):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = model.to(device)
-        result = test(model, device, criterion, val_loader)
-        model = model.to(torch.device('cpu'))
-        return result
+        
+    def evaluator(model, cache_file):
+        top1, current_accuracy = None, None
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as f:
+                top1, current_accuracy = pickle.load(f)
+        else:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model = model.to(device)
+            top1, current_accuracy = test(model, device, criterion, val_loader)
+            model = model.to(torch.device('cpu'))
+            with open(cache_file, 'wb') as f:
+                pickle.dump([top1, current_accuracy], f)
+                
+        return top1, current_accuracy
 
     def evaluator_top1(model):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -125,6 +135,7 @@ def main(args):
     #      output_names = ['output0'], # the model's output names 
     #      ) 
     # export_model('./export')
+    
 # %%
 
 from types import SimpleNamespace
@@ -148,62 +159,64 @@ if __name__ == '__main__':
     )
     main(args)
 
-# %%
+# # %%
 
-# %%
-import torch
-from utils import *
-from models.implements.cnn.mnist import LeNet
-from nni.compression.pytorch import ModelSpeedup
+# # %%
+# import torch
+# from utils import *
+# from models.implements.cnn.mnist import LeNet
+# from nni.compression.pytorch import ModelSpeedup
 
-model = LeNet()
-input_size = get_input_size('mnist')
-dummy_input = get_dummy_input(input_size, 1)
-model.load_state_dict(torch.load('/work/experiments/mnist_lenet/tvm/006_000000_model.pth'))
-masks_file = '/work/experiments/mnist_lenet/tvm/006_000000_mask.pth'
-m_speedup = ModelSpeedup(model, dummy_input, masks_file, torch.device('cpu'))
-m_speedup.speedup_model()
+# model = LeNet()
+# input_size = get_input_size('mnist')
+# dummy_input = get_dummy_input(input_size, 1)
+# model.load_state_dict(torch.load('/work/experiments/mnist_lenet/tvm/006_000000_model.pth'))
+# masks_file = '/work/experiments/mnist_lenet/tvm/006_000000_mask.pth'
+# m_speedup = ModelSpeedup(model, dummy_input, masks_file, torch.device('cpu'))
+# m_speedup.speedup_model()
 
-torch.onnx.export(model,         # model being run 
-        dummy_input,       # model input (or a tuple for multiple inputs) 
-        "6.onnx",       # where to save the model  
-        export_params=True,  # store the trained parameter weights inside the model file 
-        opset_version=12,    # the ONNX version to export the model to 
-        do_constant_folding=True,  # whether to execute constant folding for optimization 
-        input_names = ['input0'],   # the model's input names 
-        output_names = ['output0'], # the model's output names 
-        ) 
+# torch.onnx.export(model,         # model being run 
+#         dummy_input,       # model input (or a tuple for multiple inputs) 
+#         "6.onnx",       # where to save the model  
+#         export_params=True,  # store the trained parameter weights inside the model file 
+#         opset_version=12,    # the ONNX version to export the model to 
+#         do_constant_folding=True,  # whether to execute constant folding for optimization 
+#         input_names = ['input0'],   # the model's input names 
+#         output_names = ['output0'], # the model's output names 
+#         ) 
 
-# %%
-from dotenv import load_dotenv
-import torch
-from models.implements import get_model_zoo
-from utils import *
+# # %%
+# from dotenv import load_dotenv
+# import torch
+# from models.implements import get_model_zoo
+# from utils import *
 
-def evaluator(model):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-    acc1, acc5 = test(model, device, criterion, val_loader)
-    model = model.to(torch.device('cpu'))
-    return acc1, acc5
-# %%
-model, pth = get_model_zoo()['alexnet']
-model = model(True)
+# def evaluator(model):
+#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#     model = model.to(device)
+#     acc1, acc5 = test(model, device, criterion, val_loader)
+#     model = model.to(torch.device('cpu'))
+#     return acc1, acc5
+# # %%
+# model, pth = get_model_zoo()['alexnet']
+# model = model(True)
 
-torch.manual_seed(42)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-train_loader, val_loader, criterion = get_data_dataset('imagenet', '/work/dataset', 512, 64)
+# torch.manual_seed(42)
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# train_loader, val_loader, criterion = get_data_dataset('imagenet', '/work/dataset', 512, 64)
 
-# %%
-acc1, acc5 = evaluator(model)
-print(acc1, acc5)
+# # %%
+# acc1, acc5 = evaluator(model)
+# print(acc1, acc5)
 
-# %%
+# # %%
 
-#%%
-val_loader[0]
-# %%
+# #%%
+# val_loader[0]
+# # %%
 
-# %%
+# # %%
+
+# # %%
 
 # %%

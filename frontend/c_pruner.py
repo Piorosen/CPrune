@@ -228,9 +228,9 @@ class CPruner(Pruner):
         pruner = PRUNER_DICT[self._base_algo](copy.deepcopy(model), config_list, dependency_aware=True, dummy_input=self._dummy_input)
         model_masked = pruner.compress()
         
-        # if not (os.path.exists(output_mask) or os.path.exists(output_mask)):
+        if not (os.path.exists(output_mask) or os.path.exists(output_mask)):
             # added 0: speed_up
-        pruner.export_model(output_model, output_mask)
+            pruner.export_model(output_model, output_mask)
         
         return cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked
 
@@ -293,14 +293,8 @@ class CPruner(Pruner):
         # Compute Accuracy for what?, Not yet prunned.
         # tune_name = os.path.join(self._experiment_data_dir, 'tvm', f'{str(pruning_iteration).zfill(3)}_{str(cnt).zfill(6)}')
         file_namess = os.path.join(self._experiment_data_dir, 'tvm', 'baseline_eval.pkl')
-        _, current_accuracy = None, None
-        if os.path.exists(file_namess):
-            with open(file_namess, 'rb') as f:
-                _, current_accuracy = pickle.load(f)
-        else:
-            top1, current_accuracy = self._evaluator(model_to_Prune)
-            with open(file_namess, 'wb') as f:
-                pickle.dump([top1, current_accuracy], f)
+        top1, current_accuracy = self._evaluator(model_to_Prune, file_namess)
+
                 
         # for what target latency?
         current_latency = output.CurrentLatency.mean()
@@ -359,6 +353,9 @@ class CPruner(Pruner):
                 tune_name = os.path.join(self._experiment_data_dir, 'tvm', f'{str(pruning_iteration).zfill(3)}_{str(cnt).zfill(6)}')
                 output_model = tune_name + '_model.pth'
                 output_mask = tune_name + '_mask.pth'
+                output_model_train = tune_name + '_model_train.pth'
+                output_mask_train = tune_name + '_mask_train.pth'
+                output_evals = tune_name + '_eval.pkl'
                 init_cnt = cnt
                 
                 cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked = self.__pruning_layer(cnt,
@@ -390,9 +387,8 @@ class CPruner(Pruner):
                 input2.TVM_DeviceKey = os.getenv("ID_OPTIMIZATION_HARDWARE")
                 input2.TVM_TrackerHost = os.environ.get("TVM_TRACKER_HOST", "0.0.0.0")
                 input2.TVM_TrackerPort = int(os.environ["TVM_TRACKER_PORT"])
-                
-                output2 = optimizer_tvm.optimizing(input, tune_name)
-                
+
+                output2 = optimizer_tvm.optimizing(input2, tune_name)
                 ch_num = int(subgraph.SubgraphConv2d[output.TaskTimesRank[init_cnt]] * (1 - target_op_sparsity))
                 #################################################
                 logger.info('Subgraph: {}, Temp latency: {:>8.4f}, Total estimated latency: {:>8.4f}, Channel: {:4d}, Next trials: {:4d}'
@@ -419,13 +415,14 @@ class CPruner(Pruner):
                     
                     # short_num = 5 # Training Epoch
                     
-                    for epoch in range(short_num):
-                        self._short_term_trainer(model_masked, optimizer, epochs=epoch)
-                        acc, acc_5 = self._evaluator(model_masked)
-                        if acc_5 > best_acc_5:
-                            best_acc_5 = acc_5
-                        if acc > best_acc:
-                            best_acc = acc
+                    if not os.path.exists(output_model_train):
+                        self._short_term_trainer(model_masked, optimizer, epochs=short_num)
+                    acc, acc_5 = self._evaluator(model_masked, output_evals)
+                    
+                    if acc_5 > best_acc_5:
+                        best_acc_5 = acc_5
+                    if acc > best_acc:
+                        best_acc = acc
 
                     print('Subgraph: {}, Short_tune - Top-1 Accuracy: {:>8.5f}, Top-5 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc, best_acc_5))
                     logger.info('Subgraph: {}, Top-1 Accuracy: {:>8.5f}, Top-5 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc, best_acc_5))
@@ -472,7 +469,7 @@ class CPruner(Pruner):
                     with open(tune_name + '_config.pkl', 'wb') as f:
                         pickle.dump(self._config_list_generated, f)
                         
-                    pruner.export_model(output_model, output_mask)
+                    pruner.export_model(output_model_train, output_mask_train)
                     logger.info('=============== task_times ===============\n')
                     logger.info(str(task_times))
                     logger.info('\n')
@@ -501,7 +498,7 @@ class CPruner(Pruner):
                         setattr(wrapper, k, masks[k])
 
                 # update weights parameters
-                model_to_Prune.load_state_dict(torch.load(output_model))
+                model_to_Prune.load_state_dict(torch.load(output_model_train))
                 logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f}'.format(budget, best_op['latency']))
                 logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f} \n'.format(budget, best_op['latency']))
 
@@ -511,16 +508,15 @@ class CPruner(Pruner):
             pruning_iteration += 1
 
         # load weights parameters
-        self.load_model_state_dict(torch.load(output_model))
+        self.load_model_state_dict(torch.load(output_model_train))
 
         model = copy.deepcopy(self._original_model)
         # model.load_state_dict(torch.load(output_model))
         # m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
         # m_speedup.speedup_model()
         
-        
-        
         return model
+    
     def _get_latest_iter(self):
         dirs = os.path.join(self._experiment_data_dir, 'tvm')
         dirs = os.listdir(dirs)

@@ -10,7 +10,7 @@ import torch.distributed as dist
 
 #%%
 def get_data_dataset(dataset, data_dir, batch_size, test_batch_size):
-    kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {
+    kwargs = {'num_workers': 24, 'pin_memory': True, 'prefetch_factor': 2} if torch.cuda.is_available() else {
     }
     
     if dataset == 'cifar10':
