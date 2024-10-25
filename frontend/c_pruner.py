@@ -228,9 +228,9 @@ class CPruner(Pruner):
         pruner = PRUNER_DICT[self._base_algo](copy.deepcopy(model), config_list, dependency_aware=True, dummy_input=self._dummy_input)
         model_masked = pruner.compress()
         
-        if not (os.path.exists(output_mask) or os.path.exists(output_mask)):
-            # added 0: speed_up
-            pruner.export_model(output_model, output_mask)
+        # if not (os.path.exists(output_mask) or os.path.exists(output_mask)):
+        # added 0: speed_up
+        pruner.export_model(output_model, output_mask)
         
         return cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked
 
@@ -294,7 +294,6 @@ class CPruner(Pruner):
         # tune_name = os.path.join(self._experiment_data_dir, 'tvm', f'{str(pruning_iteration).zfill(3)}_{str(cnt).zfill(6)}')
         file_namess = os.path.join(self._experiment_data_dir, 'tvm', 'baseline_eval.pkl')
         top1, current_accuracy = self._evaluator(model_to_Prune, file_namess)
-
                 
         # for what target latency?
         current_latency = output.CurrentLatency.mean()
@@ -368,14 +367,20 @@ class CPruner(Pruner):
                                         model_to_Prune,
                                         output_mask,
                                         output_model)
-                
+
                 model = copy.deepcopy(self._original_model)
+                oflop, oparam, _ = count_flops_params(copy.deepcopy(model), self._dummy_input)
                 model.load_state_dict(torch.load(output_model))
                 m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
                 m_speedup.speedup_model()
                 # added 1: Autotune + TVM build
                 model.eval()
-                
+                flop, param, _ = count_flops_params(model.eval(), self._dummy_input)
+                if flop == oflop and param == oparam:
+                    # this is equally operation.
+                    logger.warning(f'Warning! : this layer is only work that spasity layer. {self.get_modules_wrapper()[output.TaskTimesRank[init_cnt]]}')
+                    continue
+                    
                 input_data = torch.randn(self._input_size).to(device)
                 subgraph = self._get_extract_subgraph(model)
                 input2 = optimizer_tvm.OptimizerTVMInput()
