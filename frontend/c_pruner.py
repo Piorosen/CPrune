@@ -247,6 +247,7 @@ class CPruner(Pruner):
         # target = "llvm -mtriple=%s-linux-none" % arch
         use_android = False
         model_to_Prune = copy.deepcopy(self._original_model)
+        
         model_to_Prune.eval()
 
         input_data = torch.randn(self._input_size).to(device)
@@ -357,29 +358,46 @@ class CPruner(Pruner):
                 output_evals = tune_name + '_eval.pkl'
                 init_cnt = cnt
                 
-                cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked = self.__pruning_layer(cnt,
-                                        output.TaskTimes, 
-                                        output.TaskTimesRank,
-                                        pruning_times,
-                                        output.SubgraphTasks,
-                                        subgraph.SubgraphConv2d,
-                                        output.PruneNum, 
-                                        model_to_Prune,
-                                        output_mask,
-                                        output_model)
-
-                model = copy.deepcopy(self._original_model)
-                oflop, oparam, _ = count_flops_params(copy.deepcopy(model), self._dummy_input)
-                model.load_state_dict(torch.load(output_model))
-                m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
-                m_speedup.speedup_model()
-                # added 1: Autotune + TVM build
+                try:
+                    cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked = self.__pruning_layer(cnt,
+                                            output.TaskTimes, 
+                                            output.TaskTimesRank,
+                                            pruning_times,
+                                            output.SubgraphTasks,
+                                            subgraph.SubgraphConv2d,
+                                            output.PruneNum, 
+                                            model_to_Prune,
+                                            output_mask,
+                                            output_model)
+                except:
+                    logger.warning(f'this layer is not more sparsity.')
+                    continue    
+                
+                model = copy.deepcopy(model_to_Prune)
+                if pruning_iteration - 1 != 0:
+                    m, epoch = self._get_last_epoch(pruning_iteration - 1)
+                    prev_tune = os.path.join(self._experiment_data_dir, 'tvm', epoch)
+                    prev_model = prev_tune + '_model_train.pth'
+                    model.load_state_dict(torch.load(prev_model))
+                    # prev_mask = prev_tune + '_mask_train.pth'
+                    # m_speedup = ModelSpeedup(model, self._dummy_input, prev_mask, device)
+                    # m_speedup.speedup_model()
+                    # added 1: Autotune + TVM build
+                
                 model.eval()
-                flop, param, _ = count_flops_params(model.eval(), self._dummy_input)
-                if flop == oflop and param == oparam:
+                oflop, oparam, _ = count_flops_params(copy.deepcopy(model), self._dummy_input)
+                
+                # model = copy.deepcopy(self._original_model)
+                # model.load_state_dict(torch.load(output_model))
+                # m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
+                # m_speedup.speedup_model()
+                # added 1: Autotune + TVM build
+                # model.eval()
+                # flop, param, _ = count_flops_params(model.eval(), self._dummy_input)
+                # if flop == oflop and param == oparam:
                     # this is equally operation.
-                    logger.warning(f'Warning! : this layer is only work that spasity layer. {self.get_modules_wrapper()[output.TaskTimesRank[init_cnt]]}')
-                    continue
+                    # logger.warning(f'Warning! : this layer is only work that spasity layer. {self.get_modules_wrapper()[output.TaskTimesRank[init_cnt]]}')
+                    # continue
                     
                 input_data = torch.randn(self._input_size).to(device)
                 subgraph = self._get_extract_subgraph(model)
@@ -471,10 +489,8 @@ class CPruner(Pruner):
                     with open(tune_name + '_best_op.pkl', 'wb') as f:
                         pickle.dump(best_op, f)
                         
-                    with open(tune_name + '_config.pkl', 'wb') as f:
-                        pickle.dump(self._config_list_generated, f)
-                        
-                    pruner.export_model(output_model_train, output_mask_train)
+                    if not os.path.exists(output_model_train):
+                        pruner.export_model(output_model_train, output_mask_train)
                     logger.info('=============== task_times ===============\n')
                     logger.info(str(task_times))
                     logger.info('\n')
@@ -501,7 +517,10 @@ class CPruner(Pruner):
                             break
                     for k in masks:
                         setattr(wrapper, k, masks[k])
-
+                
+                with open(tune_name + '_config.pkl', 'wb') as f:
+                    pickle.dump(self._config_list_generated, f)
+                    
                 # update weights parameters
                 model_to_Prune.load_state_dict(torch.load(output_model_train))
                 logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f}'.format(budget, best_op['latency']))
@@ -536,8 +555,9 @@ class CPruner(Pruner):
             pk_max = max(list(map(lambda x: int(x), pk)))
             return pk_max
 
-    def _get_last_epoch(self):
-        pk_max = self._get_latest_iter()
+    def _get_last_epoch(self, cnt):
+        # pk_max = self._get_latest_iter()
+        pk_max = cnt
         if pk_max == 0:
             return 0, None
         
@@ -547,3 +567,4 @@ class CPruner(Pruner):
         dd = list(filter(lambda x: x[:3] == iter, dirs))
         epoch = dd[0].split('.')[0].split('_')[:2]
         return pk_max, '_'.join(epoch)
+#%%
