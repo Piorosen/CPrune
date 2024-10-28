@@ -61,7 +61,7 @@ def main():
     parser.add_argument('--model', help="Path to set as dataset_directory", default='all', type=str)
     
     # Parse the arguments
-    args, unknown = parser.parse_known_args()
+    args, _ = parser.parse_known_args()
     print(args)
     
     os.makedirs(args.output, exist_ok=True)

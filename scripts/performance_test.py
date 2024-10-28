@@ -102,9 +102,9 @@ def main():
     
     # Add arguments for each of the provided variables
     parser.add_argument("--name", type=str, default='resnet18', help="Name of the model")
-    parser.add_argument("--model_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/004_000004_model_train.pth', help="Path to the model .pth file")
-    parser.add_argument("--mask_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/004_000004_mask.pth', help="Path to the mask .pth file")
-    parser.add_argument("--tvm_log", type=str, default='/work/experiments/imagenet_resnet18/tvm/004_000004.log', help="Path to the TVM log file")
+    parser.add_argument("--model_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/004_000000_model_train.pth', help="Path to the model .pth file")
+    parser.add_argument("--mask_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/004_000000_mask.pth', help="Path to the mask .pth file")
+    parser.add_argument("--tvm_log", type=str, default='/work/experiments/imagenet_resnet18/tvm/004_000000.log', help="Path to the TVM log file")
     parser.add_argument("--tvm_target", type=str, default="llvm -mtriple=aarch64-linux-none", help="TVM target configuration")
     parser.add_argument("--tvm_devicekey", type=str, default='rockpi', help="TVM device key")
     parser.add_argument("--tvm_host", type=str, default='127.0.0.1', help="TVM tracker host address")
