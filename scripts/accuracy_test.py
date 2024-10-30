@@ -74,8 +74,8 @@ def main():
     
     # Add arguments for each of the provided variables
     parser.add_argument("--name", type=str, default='resnet18', help="Name of the model")
-    parser.add_argument("--model_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/003_000000_model.pth', help="Path to the model .pth file")
-    parser.add_argument("--mask_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/003_000000_mask.pth', help="Path to the mask .pth file")
+    parser.add_argument("--model_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/013_000006_model.pth', help="Path to the model .pth file")
+    parser.add_argument("--mask_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/013_000006_mask.pth', help="Path to the mask .pth file")
     parser.add_argument('--dataset_directory', type=str, help="Path to set as dataset_directory", default='/work/dataset')
     parser.add_argument('--batch_size', help="Path to set as dataset_directory", default=128, type=int)
     parser.add_argument('--test_batch_size', help="Path to set as dataset_directory", default=128, type=int)

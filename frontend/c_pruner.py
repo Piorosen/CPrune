@@ -212,7 +212,7 @@ class CPruner(Pruner):
             logger.info('Improper Subgraph: ' + wrapper.name + ', Total: ' + str(overlap_num) + ' subgraphs\n')
             # file_object = open('./record_tvm.txt', 'a')      
             # file_object.close()
-            return
+            return cnt, None, ch_num, wrapper, target_op_sparsity, overlap_num, None
 
         config_list = copy.deepcopy(self._config_list_generated)
         for wrapper_idx in task_times_rank[init_cnt: init_cnt + overlap_num]:
@@ -369,35 +369,41 @@ class CPruner(Pruner):
                                             model_to_Prune,
                                             output_mask,
                                             output_model)
+                    if pruner == None:
+                        continue
                 except:
                     logger.warning(f'this layer is not more sparsity.')
                     continue    
                 
-                model = copy.deepcopy(model_to_Prune)
-                if pruning_iteration - 1 != 0:
-                    m, epoch = self._get_last_epoch(pruning_iteration - 1)
-                    prev_tune = os.path.join(self._experiment_data_dir, 'tvm', epoch)
-                    prev_model = prev_tune + '_model_train.pth'
-                    model.load_state_dict(torch.load(prev_model))
-                    # prev_mask = prev_tune + '_mask_train.pth'
-                    # m_speedup = ModelSpeedup(model, self._dummy_input, prev_mask, device)
-                    # m_speedup.speedup_model()
-                    # added 1: Autotune + TVM build
                 
-                model.eval()
-                oflop, oparam, _ = count_flops_params(copy.deepcopy(model), self._dummy_input)
-                
-                # model = copy.deepcopy(self._original_model)
-                # model.load_state_dict(torch.load(output_model))
-                # m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
-                # m_speedup.speedup_model()
+                # Get Flops from Previous Model
                 # added 1: Autotune + TVM build
-                # model.eval()
-                # flop, param, _ = count_flops_params(model.eval(), self._dummy_input)
-                # if flop == oflop and param == oparam:
-                    # this is equally operation.
-                    # logger.warning(f'Warning! : this layer is only work that spasity layer. {self.get_modules_wrapper()[output.TaskTimesRank[init_cnt]]}')
-                    # continue
+                if False:
+                    model = copy.deepcopy(model_to_Prune)
+                    if pruning_iteration - 1 != 0:
+                        m, epoch = self._get_last_epoch(pruning_iteration - 1)
+                        prev_tune = os.path.join(self._experiment_data_dir, 'tvm', epoch)
+                        prev_model = prev_tune + '_model_train.pth'
+                        model.load_state_dict(torch.load(prev_model))
+                        prev_mask = prev_tune + '_mask_train.pth'
+                        m_speedup = ModelSpeedup(model, self._dummy_input, prev_mask, device)
+                        m_speedup.speedup_model()
+                    model.eval() # if not have. Origin Model.
+                    flop, param, _ = count_flops_params(model.eval(), self._dummy_input)
+
+                model = copy.deepcopy(model_to_Prune)
+                model.load_state_dict(torch.load(output_model))
+                m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
+                m_speedup.speedup_model()
+                # added 1: Autotune + TVM build
+                model.eval()
+                
+                if False:
+                    oflop, oparam, _ = count_flops_params(copy.deepcopy(model), self._dummy_input)
+                    if flop == oflop and param == oparam:
+                        # this is equally operation.
+                        logger.warning(f'Warning! : this layer is only work that spasity layer. {self.get_modules_wrapper()[output.TaskTimesRank[init_cnt]]}')
+                        continue
                     
                 input_data = torch.randn(self._input_size).to(device)
                 subgraph = self._get_extract_subgraph(model)
@@ -437,8 +443,16 @@ class CPruner(Pruner):
                     best_acc_5 = 0
                     
                     # short_num = 5 # Training Epoch
+                    print(output_model_train)
+                    print(output_model_train)
+                    _, epoch = self._get_last_epoch()
                     
-                    if not os.path.exists(output_model_train):
+                    if epoch == None:
+                        now_tune = tune_name
+                    else:
+                        now_tune = os.path.join(self._experiment_data_dir, 'tvm', epoch)
+                    now_model = now_tune + '_model_train.pth'
+                    if not os.path.exists(now_model):
                         self._short_term_trainer(model_masked, optimizer, epochs=short_num)
                     acc, acc_5 = self._evaluator(model_masked, output_evals)
                     
@@ -555,16 +569,19 @@ class CPruner(Pruner):
             pk_max = max(list(map(lambda x: int(x), pk)))
             return pk_max
 
-    def _get_last_epoch(self, cnt):
-        # pk_max = self._get_latest_iter()
-        pk_max = cnt
+    def _get_last_epoch(self, cnt=-1):
+        if cnt == -1:
+            pk_max = self._get_latest_iter()
+        else:
+            pk_max = cnt
         if pk_max == 0:
             return 0, None
         
         iter = str(pk_max).zfill(3)
         dirs = os.path.join(self._experiment_data_dir, 'tvm')
         dirs = os.listdir(dirs)
+        dirs.sort()
         dd = list(filter(lambda x: x[:3] == iter, dirs))
-        epoch = dd[0].split('.')[0].split('_')[:2]
+        epoch = dd[-1].split('.')[0].split('_')[:2]
         return pk_max, '_'.join(epoch)
 #%%

@@ -68,15 +68,6 @@ def main(args):
         return result
     
     
-    # # If you need a training model.
-    # # file_name = os.path.join(args.experiment_data_dir, f'{args.model}.pth')
-    # if os.path.exists(file_name):
-    #     model.load_state_dict(torch.load(file_name))
-    # else:
-        # os.makedirs(args.experiment_data_dir, exist_ok=True)
-    #     short_term_trainer(model, epochs=100)
-    #     torch.save(model.state_dict(), file_name)
-    
     # ImageNet
     if args.dataset == 'imagenet':
         # ResNet-18
@@ -124,7 +115,7 @@ def main(args):
     #     m_speedup = ModelSpeedup(model, dummy_input, masks_file, device)
     #     m_speedup.speedup_model()
 
-    # model.eval() 
+    # model.eval() +
     # torch.onnx.export(model,         # model being run 
     #      dummy_input,       # model input (or a tuple for multiple inputs) 
     #      "LeNet.onnx",       # where to save the model  
@@ -147,11 +138,11 @@ if __name__ == '__main__':
     dataset='imagenet',
     data_dir='/work/dataset',
     model='resnet18',
-    batch_size=128,
-    test_batch_size=128,  # 64
+    batch_size=256,
+    test_batch_size=256,  # 64
     fine_tune=True,
     fine_tune_epochs=1,
-    experiment_data_dir='/work/experiments/imagenet_resnet18',
+    experiment_data_dir='/work/experiments/imagenet_resnet18_chan',
     base_algo='l1',
     sparsity=0.1,
     log_interval=1000,  # 200

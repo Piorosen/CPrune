@@ -11,6 +11,7 @@ from nni.compression.pytorch import ModelSpeedup
 import time
 import argparse
 import json
+import copy
 
 # 1. Load Model
 # 2. History Apply
@@ -89,11 +90,41 @@ def evaluate_tvm(mod, params, input_size, input_name, device_type, tvm_target, t
 
     data_tvm = tvm.nd.array((np.random.uniform(size=input_size)).astype('float32'))
     module.set_input(input_name, data_tvm)
-    ftimer = module.module.time_evaluator("run", ctx, number=10, repeat=50)
+    ftimer = module.module.time_evaluator("run", ctx, number=10, repeat=10)
     prof_res = np.array(ftimer().results) * 1e3
     current_latency = np.mean(prof_res)
     
     return prof_res
+#%%
+def safe_int(value):
+    try:
+        return int(value)
+    except ValueError:
+        return None  # 혹은 원하는 값을 반환
+    
+def _get_latest_iter(dirs):
+    dirs = os.listdir(dirs)
+    pk = list(filter(lambda x: x[-3:] == 'pkl', dirs))
+    pk = list(filter(lambda x: safe_int(x.split('_')[0]), pk))
+    pk = list(filter(lambda x: x.split('_')[-1] == 'op.pkl', pk))
+    pk = list(map(lambda x: x.split("_")[0], pk))
+
+    if len(pk) == 0:
+        return 0
+    else:
+        pk_max = max(list(map(lambda x: int(x), pk)))
+        return pk_max
+
+def _get_last_epoch(cnt, dirs):
+    _experiment_data_dir = dirs
+    pk_max = _get_latest_iter(dirs)
+
+    iter = str(cnt).zfill(3)
+    dirs = os.listdir(dirs)
+    dirs.sort()
+    dd = list(filter(lambda x: x[:3] == iter, dirs))
+    epoch = dd[-1].split('.')[0].split('_')[:2]
+    return '_'.join(epoch)
 #%%
 
 def main():
@@ -102,9 +133,9 @@ def main():
     
     # Add arguments for each of the provided variables
     parser.add_argument("--name", type=str, default='resnet18', help="Name of the model")
-    parser.add_argument("--model_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/004_000000_model_train.pth', help="Path to the model .pth file")
-    parser.add_argument("--mask_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/004_000000_mask.pth', help="Path to the mask .pth file")
-    parser.add_argument("--tvm_log", type=str, default='/work/experiments/imagenet_resnet18/tvm/004_000000.log', help="Path to the TVM log file")
+    parser.add_argument("--model_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/001_000002_model.pth', help="Path to the model .pth file")
+    parser.add_argument("--mask_pth", type=str, default='/work/experiments/imagenet_resnet18/tvm/001_000002_mask.pth', help="Path to the mask .pth file")
+    parser.add_argument("--tvm_log", type=str, default='/work/experiments/imagenet_resnet18/tvm/001_000002.log', help="Path to the TVM log file")
     parser.add_argument("--tvm_target", type=str, default="llvm -mtriple=aarch64-linux-none", help="TVM target configuration")
     parser.add_argument("--tvm_devicekey", type=str, default='rockpi', help="TVM device key")
     parser.add_argument("--tvm_host", type=str, default='127.0.0.1', help="TVM tracker host address")
@@ -113,37 +144,65 @@ def main():
     args, _ = parser.parse_known_args()
     
     device = torch.device('cpu')
-    model, _ = get_model_zoo(args.name)
-    info = get_files(args.name)
-    dummy_input = torch.randn([4, 3, 224, 224])
-
-    model.to(device)
-    model.eval()
-
-    model.load_state_dict(torch.load(args.model_pth))
-    m_speedup = ModelSpeedup(model, dummy_input, args.mask_pth, device)
-    m_speedup.speedup_model()
-
-    input_shape = [1,3,224,224]
-    dummy_input = torch.randn(input_shape)
-    scripted_model = torch.jit.trace(model, dummy_input).eval()
-    input_name = "input0"
-    shape_list = [(input_name, input_shape)]
-    mod, params = relay.frontend.from_pytorch(scripted_model, shape_list)
-
-    desired_layouts = {'nn.conv2d': ['NHWC', 'default'], 'nn.dense': ['NHWC', 'default']}
-    seq = tvm.transform.Sequential([relay.transform.RemoveUnusedFunctions(),
-                                    relay.transform.ConvertLayout(desired_layouts),
-                                    relay.transform.InferType(),
-                                    relay.transform.FoldConstant(),
-                                    relay.transform.DeadCodeElimination()])
-    with tvm.transform.PassContext(opt_level=3):
-        mod = seq(mod)
-        
-    result = evaluate_tvm(mod, params, input_shape, input_name, 'cpu', args.tvm_target, args.tvm_devicekey, args.tvm_host, args.tvm_port, args.tvm_log)
-    print(json.dumps({'inference': result, 'info': info, 'param': vars(args)}))
     
-if __name__ == 'main':
+    
+    
+    dirs = os.path.join('/work/experiments/imagenet_resnet18', 'tvm')
+    pk_max = _get_latest_iter(dirs)
+    items = [_get_last_epoch(i, dirs) for i in range(1, pk_max + 1)]
+    rrr = []
+    for item in items:
+        o_itme = item
+        item = os.path.join(dirs, item)
+        args.model_pth = item + '_model_train.pth'
+        args.mask_pth = item + '_mask.pth'
+        args.tvm_log = item + '.log'
+        
+        model, _ =  get_model_zoo(args.name)
+        model = copy.deepcopy(model)
+        info = get_files(args.name)
+        dummy_input = torch.randn([4, 3, 224, 224])
+        model.to(device)
+        model.eval()
+
+        model.load_state_dict(torch.load(args.model_pth))
+        m_speedup = ModelSpeedup(model, dummy_input, args.mask_pth, device)
+        m_speedup.speedup_model()
+
+        # dummy_input = torch.randn((1,3,224,224))
+        # torch.onnx.export(model,         # model being run 
+        #     dummy_input,       # model input (or a tuple for multiple inputs) 
+        #     "resnet18.onnx",       # where to save the model  
+        #     export_params=True,  # store the trained parameter weights inside the model file 
+        #     opset_version=12,    # the ONNX version to export the model to 
+        #     do_constant_folding=True,  # whether to execute constant folding for optimization 
+        #     input_names = ['input0'],   # the model's input names 
+        #     output_names = ['output0'], # the model's output names 
+        #     ) 
+        input_shape = [1,3,224,224]
+        dummy_input = torch.randn(input_shape)
+        scripted_model = torch.jit.trace(model, dummy_input).eval()
+        input_name = "input0"
+        shape_list = [(input_name, input_shape)]
+        mod, params = relay.frontend.from_pytorch(scripted_model, shape_list)
+
+        desired_layouts = {'nn.conv2d': ['NHWC', 'default'], 'nn.dense': ['NHWC', 'default']}
+        seq = tvm.transform.Sequential([relay.transform.RemoveUnusedFunctions(),
+                                        relay.transform.ConvertLayout(desired_layouts),
+                                        relay.transform.InferType(),
+                                        relay.transform.FoldConstant(),
+                                        relay.transform.DeadCodeElimination()])
+        with tvm.transform.PassContext(opt_level=3):
+            mod = seq(mod)
+            
+        result = evaluate_tvm(mod, params, input_shape, input_name, 'cpu', args.tvm_target, args.tvm_devicekey, args.tvm_host, args.tvm_port, args.tvm_log)
+        with open(f'{o_itme}.json', 'w') as f:
+            json.dump({'inference': result.tolist(), 'info': info, 'param': vars(args)}, f)
+    print(rrr)
+#%%
+if __name__ == '__main__':
     main()
 
 # %%
+
+#%%
