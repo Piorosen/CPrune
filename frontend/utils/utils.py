@@ -8,6 +8,10 @@ import time
 import datetime
 import torch.distributed as dist
 
+def write_log(pruning_iter, cnt, event, name, experiments:str):
+    with open(os.path.join(experiments, 'time_log.txt'), 'at+') as f:
+        f.write(f'{time.time()},{pruning_iter},{cnt},{event},{name}\n')
+
 #%%
 def get_data_dataset(dataset, data_dir, batch_size, test_batch_size):
     kwargs = {'num_workers': 48, 'pin_memory': True, 'prefetch_factor': 3} if torch.cuda.is_available() else {
