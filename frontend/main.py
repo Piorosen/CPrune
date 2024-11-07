@@ -13,6 +13,7 @@ from cpruner import Logger, DeviceType
 from utils import *
 from models.implements import get_model_zoo
 from models.implements.cnn.mnist import LeNet
+
 logger = Logger()
 
 ###########################################################

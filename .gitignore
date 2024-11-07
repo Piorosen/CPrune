@@ -1,3 +1,5 @@
+baseline_model/
+experiments/
 .vscode/
 
 *.tar.gz
