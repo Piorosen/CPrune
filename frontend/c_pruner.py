@@ -445,7 +445,7 @@ class CPruner(Pruner):
                     # short_num = 5 # Training Epoch
                     print(output_model_train)
                     print(output_model_train)
-                    _, epoch = self._get_last_epoch()
+                    _, epoch = self._get_last_epoch(pruning_iteration)
                     
                     if epoch == None:
                         now_tune = tune_name
