@@ -26,7 +26,7 @@ from nni.compression.pytorch.utils.counter import count_flops_params
 from nni.compression.pytorch import ModelSpeedup
 from torch.optim.lr_scheduler import MultiStepLR
 
-from utils import get_dummy_input
+from utils import get_dummy_input, write_log
 from cpruner import DeviceType
 from cpruner import optimizer_tvm
 from cpruner import Logger 
@@ -254,8 +254,9 @@ class CPruner(Pruner):
         input_data = torch.randn(self._input_size).to(device)
         
         ######################################################################
-        
+        write_log(0,0, 'start', '_get_extract_subgraph', self._experiment_data_dir)
         subgraph = self._get_extract_subgraph(model_to_Prune)
+        write_log(0,0, 'end', '_get_extract_subgraph', self._experiment_data_dir)
         pruning_times = [0.0 for _ in range(subgraph.NumConv2d)]
         real_pruning_times = [0.0 for _ in range(subgraph.NumConv2d)]
         
@@ -272,7 +273,9 @@ class CPruner(Pruner):
         tune_first = os.path.join(self._experiment_data_dir, 'tvm')
         os.makedirs(tune_first, exist_ok=True)
         tune_first = os.path.join(tune_first, "baseline")
+        write_log(0,0, 'start', 'optimizer_tvm', self._experiment_data_dir)
         output = optimizer_tvm.optimizing(input, tune_first)
+        write_log(0,0, 'end', 'optimizer_tvm', self._experiment_data_dir)
         prev_tune_name = tune_first
 
         pass_target_latency = 0
@@ -319,8 +322,10 @@ class CPruner(Pruner):
         # pruning_iteration += 1
         
         # stop condition
-        while pruning_iteration < max_iter and current_latency > budget:
+        write_log(0, 0, 'start', 'pruning', self._experiment_data_dir)
+        while pruning_iteration <= max_iter and current_latency > budget:
             # Print the message
+            
             logger.info('=======================')
             logger.info(('Process iteration {:>3}: current_accuracy = {:>8.4f}, '
                     'current_latency = {:>8.4f}, target_latency = {:>8.4f}, total_estimated_latency = {:>8.4f}, tune_trials = {:4d} \n').format(
@@ -358,7 +363,8 @@ class CPruner(Pruner):
                 output_mask_train = tune_name + '_mask_train.pth'
                 output_evals = tune_name + '_eval.pkl'
                 init_cnt = cnt
-                
+                write_log(pruning_iteration,cnt, 'start', 'sequence_pruning', self._experiment_data_dir)
+                write_log(pruning_iteration,cnt, 'start', 'layer_pruning', self._experiment_data_dir)
                 try:
                     cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked = self.__pruning_layer(cnt,
                                             output.TaskTimes, 
@@ -406,6 +412,7 @@ class CPruner(Pruner):
                         # this is equally operation.
                         logger.warning(f'Warning! : this layer is only work that spasity layer. {self.get_modules_wrapper()[output.TaskTimesRank[init_cnt]]}')
                         continue
+                write_log(pruning_iteration,cnt, 'end', 'layer_pruning', self._experiment_data_dir)
                     
                 input_data = torch.randn(self._input_size).to(device)
                 subgraph = self._get_extract_subgraph(model)
@@ -419,8 +426,10 @@ class CPruner(Pruner):
                 input2.TVM_TrackerHost = os.environ.get("TVM_TRACKER_HOST", "0.0.0.0")
                 input2.TVM_TrackerPort = int(os.environ["TVM_TRACKER_PORT"])
 
+                write_log(pruning_iteration,cnt, 'start', 'optimizer_tvm', self._experiment_data_dir)
                 output2 = optimizer_tvm.optimizing(input2, tune_name, task_index=True, previous_file=prev_tune_name)
                 prev_tune_name = tune_name
+                write_log(pruning_iteration,cnt, 'end', 'optimizer_tvm', self._experiment_data_dir)
                 
                 ch_num = int(subgraph.SubgraphConv2d[output.TaskTimesRank[init_cnt]] * (1 - target_op_sparsity))
                 #################################################
@@ -455,6 +464,7 @@ class CPruner(Pruner):
                         now_tune = tune_name
                     else:
                         now_tune = os.path.join(self._experiment_data_dir, 'tvm', epoch)
+                    write_log(pruning_iteration,cnt, 'start', 'fine_tune_train', self._experiment_data_dir)
                         
                     now_model = now_tune + '_model_train.pth'
                     if not os.path.exists(now_model):
@@ -465,6 +475,7 @@ class CPruner(Pruner):
                         best_acc_5 = acc_5
                     if acc > best_acc:
                         best_acc = acc
+                    write_log(pruning_iteration,cnt, 'end', 'fine_tune_train', self._experiment_data_dir)
 
                     print('Subgraph: {}, Short_tune - Top-1 Accuracy: {:>8.5f}, Top-5 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc, best_acc_5))
                     logger.info('Subgraph: {}, Top-1 Accuracy: {:>8.5f}, Top-5 Accuracy: {:>8.5f}'.format(wrapper.name, best_acc, best_acc_5))
@@ -548,7 +559,11 @@ class CPruner(Pruner):
                 current_accuracy = temp_acc
                 #########################
                 logger.info('Subgraph {} selected with {:4d} channels, latency {:>8.4f}, accuracy {:>8.4f} \n'.format(best_op['op_name'], best_op['ch_num'], best_op['latency'], best_op['performance']))
+            
+            write_log(pruning_iteration,cnt, 'end', 'sequence_pruning', self._experiment_data_dir)
             pruning_iteration += 1
+
+        write_log(-1, -1, 'end', 'pruning', self._experiment_data_dir)
 
         # load weights parameters
         self.load_model_state_dict(torch.load(output_model_train))
