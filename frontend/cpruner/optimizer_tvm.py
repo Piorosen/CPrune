@@ -7,6 +7,8 @@ import numpy as np
 import time
 from tvm.contrib import utils, ndk, graph_runtime as runtime
 from tvm.contrib import graph_executor
+import math
+import json
 from .logs import Logger
 from .structure import *
 
@@ -44,21 +46,35 @@ def evaluate_tvm(mod, params, input_name, data: OptimizerTVMInput, log_file):
 
     data_tvm = tvm.nd.array((np.random.uniform(size=data.InputSize)).astype(data.TVM_DataType))
     module.set_input(input_name, data_tvm)
-    ftimer = module.module.time_evaluator("run", ctx, number=10, repeat=2)
+    ftimer = module.module.time_evaluator("run", ctx, number=1, repeat=2)
     prof_res = np.array(ftimer().results) * 1e3
     current_latency = np.mean(prof_res)
     logger.info('ftimer_latency: ' + str(current_latency))
     
     return prof_res
 
-def optimizing(data: OptimizerTVMInput, load_log=None, at_least_trials = 20, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200) -> OptimizerTVMOutput:
+def optimizing(data: OptimizerTVMInput, load_log=None, at_least_trials = 20, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200, task_index=None, previous_file=None) -> OptimizerTVMOutput:
     log_file = "%s.log" % (load_log)
     pkl = "%s.pkl" % (load_log)
-    
+    if task_index == None:
+        pass
+        # log_file = "%s.log" % (load_log)
+        # pkl = "%s.pkl" % (load_log)
+    else:
+        # log_file = "%s_%d.log" % (load_log, task_index)
+        # pkl = "%s_%d.pkl" % (load_log, task_index)
+        prev_data = None
+        with open(previous_file + '.pkl', 'rb') as f:
+            prev_data = pickle.load(f)
+        
     if load_log != None and os.path.exists(pkl):
         with open(pkl, 'rb') as f:
             return pickle.load(f)
-    
+    else:
+        if task_index != None:
+            import shutil
+            shutil.copy(previous_file + '.log', log_file)
+
     scripted_model = torch.jit.trace(data.Model, data.InputData).eval()
     input_name = "input0"
     shape_list = [(input_name, data.InputSize)]
@@ -73,13 +89,33 @@ def optimizing(data: OptimizerTVMInput, load_log=None, at_least_trials = 20, num
     with tvm.transform.PassContext(opt_level=3):
         mod = seq(mod)
     
+    if os.path.exists('/work/tmp_get_error_from_tvm.txt'):
+        os.remove('/work/tmp_get_error_from_tvm.txt')
+
+                
+    with auto_scheduler.ApplyHistoryBest(log_file):
+        with tvm.transform.PassContext(opt_level=3, config={"relay.backend.use_auto_scheduler": True}):
+            if data.DeviceType == DeviceType.CPU:
+                _ = relay.build_module.build(mod, params=params, target=data.TVM_Target)
+            else:
+                _ = relay.build(mod, params=params, target="opencl -device=mali", target_host=data.TVM_Target)
+
+    error_list = []
+    
+    if os.path.exists('/work/tmp_get_error_from_tvm.txt'):
+        with open('/work/tmp_get_error_from_tvm.txt') as f:
+            error_list = f.readlines()    
+    if os.path.exists('/work/tmp_get_error_from_tvm.txt'):
+        os.remove('/work/tmp_get_error_from_tvm.txt')
+    
+    
     #################### Extract search tasks ###################
     print("Extract tasks...")
     if data.DeviceType == DeviceType.CPU:
         tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, data.TVM_Target)
     else:
         tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target="opencl -device=mali", target_host=data.TVM_Target)
-
+    tasks_size = len(tasks)
     subgraph_tasks = [-1 for _ in range(data.Subgraph.NumConv2d)]
     task_times = [-1 for _ in range(data.Subgraph.NumConv2d)]
     pos_idx = 0
@@ -93,36 +129,68 @@ def optimizing(data: OptimizerTVMInput, load_log=None, at_least_trials = 20, num
         for i in range(task_weights[idx]):
             subgraph_tasks[data.Subgraph.Pos[pos_idx]] = idx
             pos_idx += 1
-
+    
     # at_least_trials = 1 # 20
     # num_per_round = 1 # 60
     # runner_number = 1 # 10
     # runner_repeat = 1  # 2
-    tune_trials = (at_least_trials + num_per_round) * len(tasks) #(conv2d_num + others_num)        
-    
-    print("Begin tuning...")
-    tuner = auto_scheduler.TaskScheduler(tasks, task_weights)
-    tune_option = auto_scheduler.TuningOptions(
-        num_measure_trials=tune_trials,
-        builder=auto_scheduler.LocalBuilder(build_func="ndk" if data.UseAndroid else "default"),
-        runner=auto_scheduler.RPCRunner(data.TVM_DeviceKey, 
-                                        host=data.TVM_TrackerHost, 
-                                        port=data.TVM_TrackerPort, 
-                                        timeout=200, 
-                                        number=runner_number, 
-                                        repeat=runner_repeat,),
+    error_index = []
+    if task_index != None:
+        # get error key from tvm.
+        trim_error = list(map(lambda x: x.strip(), error_list))
+        # get list of workload key from tasks.
+        work_key = list(map(lambda x: x.workload_key, tasks))
         
-        measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
-        verbose=1,
-        #early_stopping=300,
-        num_measures_per_round = num_per_round,
-    )
-    tuner.tune(tune_option)        
+        # find and match without workload key from file and tasks 
+        error_index = list(map(lambda x: work_key.index(x), trim_error))
+        
+        #  = [subgraph_tasks[x] for x in error_index]
+        tune_trials = math.ceil(at_least_trials + (num_per_round * len(error_index))) #(conv2d_num + others_num)        
+        tasks = [tasks[x] for x in error_index]
+        tune_task_weights = [task_weights[x] for x in error_index]
+    else:
+        tune_task_weights = task_weights
+        tune_trials = (at_least_trials + num_per_round) * len(tasks) #(conv2d_num + others_num)        
+
+    if len(tasks) != 0:
+        print("Begin tuning...")
+        tuner = auto_scheduler.TaskScheduler(tasks, tune_task_weights)
+        tune_option = auto_scheduler.TuningOptions(
+            num_measure_trials=tune_trials,
+            builder=auto_scheduler.LocalBuilder(build_func="ndk" if data.UseAndroid else "default"),
+            runner=auto_scheduler.RPCRunner(data.TVM_DeviceKey, 
+                                            host=data.TVM_TrackerHost, 
+                                            port=data.TVM_TrackerPort, 
+                                            timeout=timeout, 
+                                            number=runner_number, 
+                                            repeat=runner_repeat,),
+            
+            measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
+            verbose=1,
+            #early_stopping=300,
+            num_measures_per_round = num_per_round,
+        )
+        tuner.tune(tune_option)    
     total_estimated_latency = 0
-    for i in range(data.Subgraph.NumConv2d):
-        task_times[i] = tuner.best_costs[subgraph_tasks[i]] * task_weights[subgraph_tasks[i]]
-        total_estimated_latency += tuner.best_costs[subgraph_tasks[i]] * 1000
-    
+        
+    if task_index == None:
+        for i in range(data.Subgraph.NumConv2d):
+            task_times[i] = tuner.best_costs[subgraph_tasks[i]] * task_weights[subgraph_tasks[i]]
+            total_estimated_latency += tuner.best_costs[subgraph_tasks[i]] * 1000
+    else:
+        best_costs = prev_data.tune_best_cost
+        prune_num = prev_data.PruneNum
+        for i in range(len(error_index)):
+            best_costs[subgraph_tasks[error_index[i]]] = tuner.best_costs[i]
+            prune_num[subgraph_tasks[error_index[i]]] = tuner.prune_num[i]
+            
+        # best_costs[task_index] = tuner.best_costs[0]
+        # prune_num[task_index] = tuner.prune_num[0]
+        
+        for i in range(data.Subgraph.NumConv2d):
+            task_times[i] = best_costs[subgraph_tasks[i]] * task_weights[subgraph_tasks[i]]
+            total_estimated_latency += best_costs[subgraph_tasks[i]] * 1000
+        
     task_times_rank = np.argsort(task_times)
     task_times_rank = np.flip(task_times_rank)
 
@@ -142,14 +210,23 @@ def optimizing(data: OptimizerTVMInput, load_log=None, at_least_trials = 20, num
     logger.info('Current latency: {:>8.4f}, Total estimated latency: {:>8.4f}'.format(current_latency.mean(), total_estimated_latency))
     logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f}, Total estimated latency: {:>8.4f}\n'.format(budget, current_latency.mean(), total_estimated_latency))
     
-    result = OptimizerTVMOutput(task_times, task_times_rank,
-                                tune_trials, 
-                                current_latency,
-                                total_estimated_latency,
-                                subgraph_tasks,
-                                tuner.prune_num)
-
+    if task_index == None:
+        result = OptimizerTVMOutput(task_times, task_times_rank,
+                                    tune_trials, 
+                                    current_latency,
+                                    total_estimated_latency,
+                                    subgraph_tasks,
+                                    tuner.prune_num,
+                                    tuner.best_costs)
+    else:
+        result = OptimizerTVMOutput(task_times, task_times_rank,
+                                    tune_trials, 
+                                    current_latency,
+                                    total_estimated_latency,
+                                    subgraph_tasks,
+                                    prune_num,
+                                    best_costs)
     with open(pkl, 'wb') as f:
         pickle.dump(result, f)
-        
+
     return result

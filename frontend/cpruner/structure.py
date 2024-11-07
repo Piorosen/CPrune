@@ -51,7 +51,7 @@ class OptimizerTVMInput:
     
 @dataclass 
 class OptimizerTVMOutput: 
-    def __init__(self, task_times, task_times_rank, tune_trials=0, current_latency=np.array([]), total_estimated_latency=0, subgraph_tasks=[], prune_num={}):
+    def __init__(self, task_times, task_times_rank, tune_trials=0, current_latency=np.array([]), total_estimated_latency=0, subgraph_tasks=[], prune_num={}, tune_best_cost=[]):
         self.TuneTrials = tune_trials
         self.CurrentLatency = current_latency
         self.TotalEstimatedLatency = total_estimated_latency
@@ -59,6 +59,7 @@ class OptimizerTVMOutput:
         self.PruneNum = prune_num
         self.TaskTimes = task_times
         self.TaskTimesRank = task_times_rank
+        self.tune_best_cost = tune_best_cost
     # TaskTimes
     # TaskTimesRank
     PruneNum: dict

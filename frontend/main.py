@@ -125,9 +125,11 @@ def main(args):
     #      input_names = ['input0'],   # the model's input names 
     #      output_names = ['output0'], # the model's output names 
     #      ) 
+    
     # export_model('./export')
     
-# %%
+
+#%%
 
 from types import SimpleNamespace
  
@@ -138,11 +140,11 @@ if __name__ == '__main__':
     dataset='imagenet',
     data_dir='/work/dataset',
     model='resnet18',
-    batch_size=256,
-    test_batch_size=256,  # 64
+    batch_size=128,
+    test_batch_size=128,  # 64
     fine_tune=True,
     fine_tune_epochs=1,
-    experiment_data_dir='/work/experiments/imagenet_resnet18_chan',
+    experiment_data_dir='/work/experiments/fast_resnet18',
     base_algo='l1',
     sparsity=0.1,
     log_interval=1000,  # 200
@@ -154,7 +156,7 @@ if __name__ == '__main__':
 
 # # %%
 # import torch
-# from utils import *
+# from utils import *   
 # from models.implements.cnn.mnist import LeNet
 # from nni.compression.pytorch import ModelSpeedup
 

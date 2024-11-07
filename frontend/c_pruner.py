@@ -242,6 +242,7 @@ class CPruner(Pruner):
         -------
         torch.nn.Module : the final pruned model
         """
+        prev_tune_name = ''
         device = torch.device('cpu')
         # target = "llvm -mtriple=%s-linux-android" % arch        
         # target = "llvm -mtriple=%s-linux-none" % arch
@@ -272,7 +273,7 @@ class CPruner(Pruner):
         os.makedirs(tune_first, exist_ok=True)
         tune_first = os.path.join(tune_first, "baseline")
         output = optimizer_tvm.optimizing(input, tune_first)
-        
+        prev_tune_name = tune_first
 
         pass_target_latency = 0
         # init_short_acc = 0
@@ -378,7 +379,7 @@ class CPruner(Pruner):
                 
                 # Get Flops from Previous Model
                 # added 1: Autotune + TVM build
-                if False:
+                if True:
                     model = copy.deepcopy(model_to_Prune)
                     if pruning_iteration - 1 != 0:
                         m, epoch = self._get_last_epoch(pruning_iteration - 1)
@@ -388,15 +389,16 @@ class CPruner(Pruner):
                         prev_mask = prev_tune + '_mask_train.pth'
                         m_speedup = ModelSpeedup(model, self._dummy_input, prev_mask, device)
                         m_speedup.speedup_model()
-                    model.eval() # if not have. Origin Model.
-                    flop, param, _ = count_flops_params(model.eval(), self._dummy_input)
+                    else:
+                        model.load_state_dict(torch.load(output_model))
+                        m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
+                        m_speedup.speedup_model()
+                        # added 1: Autotune + TVM build
+                    model.eval()
 
-                model = copy.deepcopy(model_to_Prune)
-                model.load_state_dict(torch.load(output_model))
-                m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
-                m_speedup.speedup_model()
-                # added 1: Autotune + TVM build
-                model.eval()
+                flop, param, _ = count_flops_params(model.eval(), self._dummy_input)
+                    
+                # model = copy.deepcopy(model_to_Prune)
                 
                 if False:
                     oflop, oparam, _ = count_flops_params(copy.deepcopy(model), self._dummy_input)
@@ -417,7 +419,9 @@ class CPruner(Pruner):
                 input2.TVM_TrackerHost = os.environ.get("TVM_TRACKER_HOST", "0.0.0.0")
                 input2.TVM_TrackerPort = int(os.environ["TVM_TRACKER_PORT"])
 
-                output2 = optimizer_tvm.optimizing(input2, tune_name)
+                output2 = optimizer_tvm.optimizing(input2, tune_name, task_index=True, previous_file=prev_tune_name)
+                prev_tune_name = tune_name
+                
                 ch_num = int(subgraph.SubgraphConv2d[output.TaskTimesRank[init_cnt]] * (1 - target_op_sparsity))
                 #################################################
                 logger.info('Subgraph: {}, Temp latency: {:>8.4f}, Total estimated latency: {:>8.4f}, Channel: {:4d}, Next trials: {:4d}'
@@ -445,12 +449,13 @@ class CPruner(Pruner):
                     # short_num = 5 # Training Epoch
                     print(output_model_train)
                     print(output_model_train)
-                    _, epoch = self._get_last_epoch()
+                    id, epoch = self._get_last_epoch(pruning_iteration)
                     
                     if epoch == None:
                         now_tune = tune_name
                     else:
                         now_tune = os.path.join(self._experiment_data_dir, 'tvm', epoch)
+                        
                     now_model = now_tune + '_model_train.pth'
                     if not os.path.exists(now_model):
                         self._short_term_trainer(model_masked, optimizer, epochs=short_num)
@@ -493,7 +498,7 @@ class CPruner(Pruner):
                     }
 
                     current_latency = temp_latency
-                    prev_task_times_rank = output.TaskTimesRank
+                    prev_task_times_rank = output2.TaskTimesRank
 
                     # save model weights after train
                     output = output2
