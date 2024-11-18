@@ -13,6 +13,41 @@ import torchvision.models as models
 import time
 import sys 
 
+import os
+import torchvision as tv
+
+def get_model_zoo():
+    checkpoint_dir = os.path.join(os.getenv("TORCH_HOME"), 'hub', 'checkpoints')
+    model_dict = {
+        "alexnet": [tv.models.alexnet, os.path.join(checkpoint_dir, 'alexnet-owt-4df8aa71.pth')],
+        "densenet121": [tv.models.densenet121, os.path.join(checkpoint_dir, 'densenet121-a639ec97.pth')],
+        "densenet161": [tv.models.densenet161, os.path.join(checkpoint_dir, 'densenet161-8d451a50.pth')],
+        "densenet201": [tv.models.densenet201, os.path.join(checkpoint_dir, 'densenet201-c1103571.pth')],
+        "googlenet": [tv.models.googlenet, os.path.join(checkpoint_dir, 'googlenet-1378be20.pth')],
+        "inception_v3": [tv.models.inception_v3, os.path.join(checkpoint_dir, 'inception_v3_google-1a9a5a14.pth')],
+        "mobilenet_v2": [tv.models.mobilenet_v2, os.path.join(checkpoint_dir, 'mobilenet_v2-b0353104.pth')],
+        "resnet18": [tv.models.resnet18, os.path.join(checkpoint_dir, 'resnet18-5c106cde.pth')],
+        "resnet34": [tv.models.resnet34, os.path.join(checkpoint_dir, 'resnet34-333f7ec4.pth')],
+        "resnet50": [tv.models.resnet50, os.path.join(checkpoint_dir, 'resnet50-19c8e357.pth')],
+        "resnet101": [tv.models.resnet101, os.path.join(checkpoint_dir, 'resnet101-5d3b4d8f.pth')],
+        "resnet152": [tv.models.resnet152, os.path.join(checkpoint_dir, 'resnet152-b121ed2d.pth')],
+        "resnext50_32x4d": [tv.models.resnext50_32x4d, os.path.join(checkpoint_dir, 'resnext50_32x4d-7cdf4587.pth')],
+        "resnext101_32x8d": [tv.models.resnext101_32x8d, os.path.join(checkpoint_dir, 'resnext101_32x8d-8ba56ff5.pth')],
+        "shufflenet_v2_x0_5": [tv.models.shufflenet_v2_x0_5, os.path.join(checkpoint_dir, 'shufflenetv2_x0.5-F707e7162e.pth')],
+        "shufflenet_v2_x1_0": [tv.models.shufflenet_v2_x1_0, os.path.join(checkpoint_dir, 'shufflenetv2_x1-5666bf0f80.pth')],
+        "squeezenet1_0": [tv.models.squeezenet1_0, os.path.join(checkpoint_dir, 'squeezenet1_0-a815701f.pth')],
+        "squeezenet1_1": [tv.models.squeezenet1_1, os.path.join(checkpoint_dir, 'squeezenet1_1-f364aa15.pth')],
+        "vgg11": [tv.models.vgg11, os.path.join(checkpoint_dir, 'vgg11-bbd30ac9.pth')],
+        "vgg11_bn": [tv.models.vgg11_bn, os.path.join(checkpoint_dir, 'vgg11_bn-6002323d.pth')],
+        "vgg13": [tv.models.vgg13, os.path.join(checkpoint_dir, 'vgg13-c768596a.pth')],
+        "vgg13_bn": [tv.models.vgg13_bn, os.path.join(checkpoint_dir, 'vgg13_bn-abd245e5.pth')],
+        "vgg16": [tv.models.vgg16, os.path.join(checkpoint_dir, 'vgg16-397923af.pth')],
+        "vgg16_bn": [tv.models.vgg16_bn, os.path.join(checkpoint_dir, 'vgg16_bn-6c64b313.pth')],
+        "vgg19": [tv.models.vgg19, os.path.join(checkpoint_dir, 'vgg19-bcbb9e9d.pth')],
+        "vgg19_bn": [tv.models.vgg19_bn, os.path.join(checkpoint_dir, 'vgg19_bn-c79401a0.pth')],
+    }
+    return model_dict
+
 import tvm
 from tvm import relay, auto_scheduler
 import numpy as np
@@ -234,7 +269,7 @@ class CPruner(Pruner):
         
         return cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked
 
-    def compress(self, short_num=5):
+    def compress(self, tune_mode, short_num=5):
         """
         Compress the model.
 
@@ -274,7 +309,7 @@ class CPruner(Pruner):
         os.makedirs(tune_first, exist_ok=True)
         tune_first = os.path.join(tune_first, "baseline")
         write_log(0,0, 'start', 'optimizer_tvm', self._experiment_data_dir)
-        output = optimizer_tvm.optimizing(input, tune_first)
+        output = optimizer_tvm.optimizing_all(input, tune_first)
         write_log(0,0, 'end', 'optimizer_tvm', self._experiment_data_dir)
         prev_tune_name = tune_first
 
@@ -378,6 +413,7 @@ class CPruner(Pruner):
                                             output_model)
                     if pruner == None:
                         continue
+                    
                 except:
                     logger.warning(f'this layer is not more sparsity.')
                     continue    
@@ -425,9 +461,21 @@ class CPruner(Pruner):
                 input2.TVM_DeviceKey = os.getenv("ID_OPTIMIZATION_HARDWARE")
                 input2.TVM_TrackerHost = os.environ.get("TVM_TRACKER_HOST", "0.0.0.0")
                 input2.TVM_TrackerPort = int(os.environ["TVM_TRACKER_PORT"])
+                
+                task_index = np.array(output.TaskTimesRank[init_cnt: init_cnt + overlap_num])
+                task_index = np.unique(task_index)
+                print(task_index)
 
-                write_log(pruning_iteration,cnt, 'start', 'optimizer_tvm', self._experiment_data_dir)
-                output2 = optimizer_tvm.optimizing(input2, tune_name, task_index=True, previous_file=prev_tune_name)
+                write_log(pruning_iteration,cnt, 'start', f'optimizer_tvm (tune_mode : {tune_mode})', self._experiment_data_dir)
+                
+                if tune_mode == 0:
+                    output2 = optimizer_tvm.optimizing_task_index(input2, tune_name, task_index=task_index, previous_file=prev_tune_name)
+                elif tune_mode == 1:
+                    output2 = optimizer_tvm.optimizing_all(input2, tune_name, task_index=None, previous_file=prev_tune_name)
+                elif tune_mode == 2:
+                    output2 = optimizer_tvm.optimizing_error(input2, tune_name, task_index=True, previous_file=prev_tune_name)
+    
+    
                 prev_tune_name = tune_name
                 write_log(pruning_iteration,cnt, 'end', 'optimizer_tvm', self._experiment_data_dir)
                 
@@ -444,9 +492,10 @@ class CPruner(Pruner):
                 if temp_latency > target_latency:
                     # ('./record_tvm.txt', 'a')
                     logger.info('Higher than target latency! Pruning_ratio of Subgraph {} increases one time more!\n'.format(wrapper.name))
+                    
                     # file_object.close()
                 ###############################################################################
-                temp_latency = target_latency - 0.01
+
                 if temp_latency <= target_latency:
                     logger.info('Subgraph: {}, Temp latency: {:>8.4f}, Channel: {:4d}\n'.format(wrapper.name, temp_latency, ch_num))
                     # file_object.close()
@@ -456,7 +505,6 @@ class CPruner(Pruner):
                     best_acc_5 = 0
                     
                     # short_num = 5 # Training Epoch
-                    print(output_model_train)
                     print(output_model_train)
                     id, epoch = self._get_last_epoch(pruning_iteration)
                     
@@ -470,6 +518,7 @@ class CPruner(Pruner):
                     if not os.path.exists(now_model):
                         self._short_term_trainer(model_masked, optimizer, epochs=short_num)
                     acc, acc_5 = self._evaluator(model_masked, output_evals)
+                    # acc, acc_5 = 100, 100
                     
                     if acc_5 > best_acc_5:
                         best_acc_5 = acc_5
@@ -509,6 +558,7 @@ class CPruner(Pruner):
                     }
 
                     current_latency = temp_latency
+                    target_latency = current_latency * beta
                     prev_task_times_rank = output2.TaskTimesRank
 
                     # save model weights after train

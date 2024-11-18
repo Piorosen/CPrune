@@ -107,7 +107,7 @@ def main(args):
                      acc_requirement=acc_requirement)
     
     # # Pruner.compress() returns the masked model
-    model = pruner.compress(short_num=args.fine_tune_epochs)
+    model = pruner.compress(args.tune_mode, short_num=args.fine_tune_epochs)
     
     # # model speed up
     # if args.speed_up:
@@ -145,12 +145,14 @@ if __name__ == '__main__':
     test_batch_size=128,  # 64
     fine_tune=True,
     fine_tune_epochs=1,
-    experiment_data_dir='/work/experiments/fast_resnet18',
+    experiment_data_dir='/work/experiments/fast_resnet18_task',
     base_algo='l1',
     sparsity=0.1,
     log_interval=1000,  # 200
     speed_up=True,
+    tune_mode=0 # 0 : task, 1 : all, 2 : error
     )
+    print(args)
     main(args)
 
 # # %%
