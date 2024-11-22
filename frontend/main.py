@@ -109,6 +109,8 @@ def main(args):
                      config_list, 
                      short_term_trainer=short_term_trainer, 
                      evaluator=evaluator if args.dataset == 'imagenet' else evaluator_top1, 
+                     tvm_hardward_id=args.tvm_hardward_id,
+                     tvm_target_os_is_android=args.tvm_target_os_is_android,
                      base_algo=args.base_algo, 
                      experiment_data_dir=args.experiment_data_dir, 
                      cpu_or_gpu=cpu_or_gpu, 
@@ -154,12 +156,14 @@ if __name__ == '__main__':
     test_batch_size=512,  # 64
     fine_tune=True,
     fine_tune_epochs=5,
-    experiment_data_dir='/work/experiments/manytime_rockpi_resnet18_error',
+    tvm_hardward_id='sd865',
+    tvm_target_os_is_android=True,
+    experiment_data_dir='/work/experiments/manytime_sd865_resnet18_error',
     base_algo='l1',
     sparsity=0.5,
     log_interval=1000,  # 200
     speed_up=True,
-    tune_mode=2 # 0 : task, 1 : all, 2 : error
+    tune_mode=1 # 0 : task, 1 : all, 2 : error
     )
     print(args)
     main(args)

@@ -93,7 +93,7 @@ class CPruner(Pruner):
     evaluator : function
         function to evaluate the masked model
     '''
-    def __init__(self, model, config_list, short_term_trainer, evaluator, base_algo='l1', experiment_data_dir='./', cpu_or_gpu=DeviceType.CPU, input_size=(1, 3, 224, 224), acc_requirement=0.85):
+    def __init__(self, model, config_list, short_term_trainer, evaluator, tvm_hardward_id, tvm_target_os_is_android, base_algo='l1', experiment_data_dir='./', cpu_or_gpu=DeviceType.CPU, input_size=(1, 3, 224, 224), acc_requirement=0.85):
         # models used for iterative pruning and evaluation
         self._original_model = copy.deepcopy(model)
         self._base_algo = base_algo
@@ -115,6 +115,9 @@ class CPruner(Pruner):
         self._input_size = input_size
         self._dummy_input = get_dummy_input(input_size, 4)
         self._acc_requirement = acc_requirement
+        self._tvm_hardward_id = tvm_hardward_id
+        self._tvm_target_os_is_android = tvm_target_os_is_android
+        
 
     def _update_config_list(self, config_list, op_name, sparsity):
         '''
@@ -337,14 +340,14 @@ class CPruner(Pruner):
         pruning_times = [0.0 for _ in range(subgraph.NumConv2d)]
         real_pruning_times = [0.0 for _ in range(subgraph.NumConv2d)]
         
-        input = optimizer_tvm.OptimizerTVMInput()
+        input = optimizer_tvm.OptimizerTVMInput(self._tvm_target_os_is_android)
         input.Model = model_to_Prune
         input.InputData = input_data
         input.InputSize = self._input_size
         input.DeviceType = self._cpu_or_gpu
         input.Subgraph = subgraph
         
-        input.TVM_DeviceKey = os.getenv("ID_OPTIMIZATION_HARDWARE")
+        input.TVM_DeviceKey = self._tvm_hardward_id
         input.TVM_TrackerHost = os.environ.get("TVM_TRACKER_HOST", "0.0.0.0")
         input.TVM_TrackerPort = int(os.environ["TVM_TRACKER_PORT"])
         
@@ -498,13 +501,13 @@ class CPruner(Pruner):
                     
                 input_data = torch.randn(self._input_size).to(device)
                 subgraph = self._get_extract_subgraph(model)
-                input2 = optimizer_tvm.OptimizerTVMInput()
+                input2 = optimizer_tvm.OptimizerTVMInput(self._tvm_target_os_is_android)
                 input2.Model = model
                 input2.InputData = input_data
                 input2.InputSize = self._input_size
                 input2.DeviceType = self._cpu_or_gpu
                 input2.Subgraph = subgraph
-                input2.TVM_DeviceKey = os.getenv("ID_OPTIMIZATION_HARDWARE")
+                input2.TVM_DeviceKey = self.self._tvm_hardward_id
                 input2.TVM_TrackerHost = os.environ.get("TVM_TRACKER_HOST", "0.0.0.0")
                 input2.TVM_TrackerPort = int(os.environ["TVM_TRACKER_PORT"])
                 

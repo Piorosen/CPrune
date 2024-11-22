@@ -26,10 +26,10 @@ class DeviceType(Enum):
 
 @dataclass 
 class OptimizerTVMInput:
-    def __init__(self):
-        if False:
+    def __init__(self, is_android: bool):
+        if is_android:
             self.UseAndroid: bool = True
-            self.TVM_Target: str = "llvm -mtriple=aarch64-linux-android"
+            self.TVM_Target: str = "llvm -mtriple=aarch64-linux-android29"
         else:
             self.UseAndroid: bool = False
             self.TVM_Target: str = "llvm -mtriple=aarch64-linux-none"

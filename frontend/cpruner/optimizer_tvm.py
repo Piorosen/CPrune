@@ -311,8 +311,9 @@ def optimizing_all(data: OptimizerTVMInput, load_log=None, at_least_trials = 740
             verbose=1,
             early_stopping=50,
             num_measures_per_round = num_per_round,
-        )
-        tuner.tune(tune_option, fast_tune=previous_file == '')    
+        ) 
+        tune_fast = (previous_file != '') or (os.path.exists(log_file))
+        tuner.tune(tune_option, fast_tune=tune_fast)
     total_estimated_latency = 0
         
     if task_index == None:
@@ -361,7 +362,6 @@ def optimizing_all(data: OptimizerTVMInput, load_log=None, at_least_trials = 740
                      result.tune_best_cost], f)
 
     return result
-
 
 def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 740, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200, task_index=None, previous_file=None) -> OptimizerTVMOutput:
     log_file = "%s.log" % (load_log)
