@@ -1,0 +1,38 @@
+#%%
+import torch
+import time
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend')))
+from models.implements.cnn.cifar10.resnet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
+from utils import get_data_dataset, train, test_top1
+from types import SimpleNamespace
+#%%
+torch.manual_seed(42)
+
+train_loader, val_loader, crierion = get_data_dataset('cifar10', '/work/dataset', 512, 512)
+# classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+#%%
+
+args = SimpleNamespace(log_interval=1000)
+trains = {
+    # 'resnet18', ResNet18,
+    'resnet34': ResNet34,
+    'resnet50': ResNet50,
+    'resnet101': ResNet101,
+    'resnet152': ResNet152,
+          }
+
+for name in trains.keys():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = trains[name]()
+    model.to(device)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9, weight_decay=5e-4)
+    for e in range(1000):
+        s = time.time()
+        train(args, model, device, train_loader, crierion, optimizer, e)
+        print(test_top1(model, device, crierion, val_loader))
+        print(time.time() - s)
+        if e % 100 == 0:
+            torch.save(model.state_dict(), f'./model_zoo/cifar10_{name}_{e}.pth')
+

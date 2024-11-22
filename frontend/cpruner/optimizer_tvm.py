@@ -54,9 +54,11 @@ def evaluate_tvm(mod, params, input_name, data: OptimizerTVMInput, log_file):
     
     return prof_res
 
-def optimizing_task_index(data: OptimizerTVMInput, load_log=None, at_least_trials = 20, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200, task_index=None, previous_file=None) -> OptimizerTVMOutput:
+def optimizing_task_index(data: OptimizerTVMInput, load_log=None, at_least_trials = 740, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200, task_index=None, previous_file=None) -> OptimizerTVMOutput:
     log_file = "%s.log" % (load_log)
     pkl = "%s.pkl" % (load_log)
+    show_pkl = "%s_show.pkl" % (load_log)
+
     # task_index = None
     # if task_index == None:
         # pass
@@ -149,7 +151,7 @@ def optimizing_task_index(data: OptimizerTVMInput, load_log=None, at_least_trial
             
             measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
             verbose=1,
-            #early_stopping=300,
+            early_stopping=50,
             num_measures_per_round = num_per_round,
         )
         tuner.tune(tune_option)    
@@ -213,12 +215,24 @@ def optimizing_task_index(data: OptimizerTVMInput, load_log=None, at_least_trial
                                     best_costs)
     with open(pkl, 'wb') as f:
         pickle.dump(result, f)
+        
+    with open(show_pkl, 'wb') as f:
+        pickle.dump([result.TuneTrials, 
+                     result.CurrentLatency,
+                     result.TotalEstimatedLatency, 
+                     result.SubgraphTasks,
+                     result.PruneNum,
+                     result.TaskTimes,
+                     result.TaskTimesRank,
+                     result.tune_best_cost], f)
 
     return result
 
-def optimizing_all(data: OptimizerTVMInput, load_log=None, at_least_trials = 20, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200, task_index=None, previous_file=None) -> OptimizerTVMOutput:
+def optimizing_all(data: OptimizerTVMInput, load_log=None, at_least_trials = 740, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200, task_index=None, previous_file=False) -> OptimizerTVMOutput:
     log_file = "%s.log" % (load_log)
     pkl = "%s.pkl" % (load_log)
+    show_pkl = "%s_show.pkl" % (load_log)
+
     # task_index = None
     if task_index == None:
         pass
@@ -235,7 +249,7 @@ def optimizing_all(data: OptimizerTVMInput, load_log=None, at_least_trials = 20,
         with open(pkl, 'rb') as f:
             return pickle.load(f)
         
-    if previous_file != None:
+    if previous_file != '':
         shutil.copy(previous_file + '.log', log_file)
 
     scripted_model = torch.jit.trace(data.Model, data.InputData).eval()
@@ -295,10 +309,10 @@ def optimizing_all(data: OptimizerTVMInput, load_log=None, at_least_trials = 20,
             
             measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
             verbose=1,
-            #early_stopping=300,
+            early_stopping=50,
             num_measures_per_round = num_per_round,
         )
-        tuner.tune(tune_option)    
+        tuner.tune(tune_option, fast_tune=previous_file == '')    
     total_estimated_latency = 0
         
     if task_index == None:
@@ -335,13 +349,24 @@ def optimizing_all(data: OptimizerTVMInput, load_log=None, at_least_trials = 20,
 
     with open(pkl, 'wb') as f:
         pickle.dump(result, f)
+        
+    with open(show_pkl, 'wb') as f:
+        pickle.dump([result.TuneTrials, 
+                     result.CurrentLatency,
+                     result.TotalEstimatedLatency, 
+                     result.SubgraphTasks,
+                     result.PruneNum,
+                     result.TaskTimes,
+                     result.TaskTimesRank,
+                     result.tune_best_cost], f)
 
     return result
 
 
-def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 20, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200, task_index=None, previous_file=None) -> OptimizerTVMOutput:
+def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 740, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200, task_index=None, previous_file=None) -> OptimizerTVMOutput:
     log_file = "%s.log" % (load_log)
     pkl = "%s.pkl" % (load_log)
+    show_pkl = "%s_show.pkl" % (load_log)
     # task_index = None
     if task_index == None:
         pass
@@ -359,8 +384,9 @@ def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 2
             return pickle.load(f)
     else:
         if task_index != None:
-            import shutil
-            shutil.copy(previous_file + '.log', log_file)
+            if not os.path.exists(log_file):
+                import shutil
+                shutil.copy(previous_file + '.log', log_file)
 
     scripted_model = torch.jit.trace(data.Model, data.InputData).eval()
     input_name = "input0"
@@ -391,7 +417,6 @@ def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 2
     if os.path.exists('/work/tmp_get_error_from_tvm.txt'):
         os.remove('/work/tmp_get_error_from_tvm.txt')
     
-    
     #################### Extract search tasks ###################
     print("Extract tasks...")
     if data.DeviceType == DeviceType.CPU:
@@ -418,6 +443,7 @@ def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 2
     # runner_number = 1 # 10
     # runner_repeat = 1  # 2
     error_index = []
+    # error_index = [16, 2, 3, 1, 0]
     if task_index != None:
         # get error key from tvm.
         trim_error = list(map(lambda x: x.strip(), error_list))
@@ -428,16 +454,19 @@ def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 2
         error_index = list(map(lambda x: work_key.index(x), trim_error))
         
         #  = [subgraph_tasks[x] for x in error_index]
-        tune_trials = math.ceil(at_least_trials + num_per_round) * len(error_index) #(conv2d_num + others_num)        
-        tasks = [tasks[x] for x in error_index]
-        tune_task_weights = [task_weights[x] for x in error_index]
+        # tune_trials = math.ceil(at_least_trials + num_per_round) * len(error_index) #(conv2d_num + others_num)    
+        # tune_trials = 800 * len(error_index) #(conv2d_num + others_num)        
+        # tasks = [tasks[x] for x in error_index]
+        # tune_task_weights = [task_weights[x] for x in error_index]
+        tune_task_weights = task_weights
+        tune_trials = (at_least_trials + num_per_round) * len(tasks) #(conv2d_num + others_num)
     else:
         tune_task_weights = task_weights
         tune_trials = (at_least_trials + num_per_round) * len(tasks) #(conv2d_num + others_num)        
-
+    tuner = None
     if len(tasks) != 0:
-        print("Begin tuning...")
         tuner = auto_scheduler.TaskScheduler(tasks, tune_task_weights, load_log_file=log_file)
+        print("Begin tuning...")
         tune_option = auto_scheduler.TuningOptions(
             num_measure_trials=tune_trials,
             builder=auto_scheduler.LocalBuilder(build_func="ndk" if data.UseAndroid else "default"),
@@ -450,29 +479,32 @@ def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 2
             
             measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
             verbose=1,
-            #early_stopping=300,
+            early_stopping=50,
             num_measures_per_round = num_per_round,
         )
-        tuner.tune(tune_option)    
+        tuner.tune(tune_option)
     total_estimated_latency = 0
         
-    if task_index == None:
-        for i in range(data.Subgraph.NumConv2d):
-            task_times[i] = tuner.best_costs[subgraph_tasks[i]] * task_weights[subgraph_tasks[i]]
-            total_estimated_latency += tuner.best_costs[subgraph_tasks[i]] * 1000
-    else:
-        best_costs = prev_data.tune_best_cost
-        prune_num = prev_data.PruneNum
-        for i in range(len(error_index)):
-            best_costs[subgraph_tasks[error_index[i]]] = tuner.best_costs[i]
-            prune_num[subgraph_tasks[error_index[i]]] = tuner.prune_num[i]
+    # if task_index == None:
+    for i in range(data.Subgraph.NumConv2d):
+        task_times[i] = tuner.best_costs[subgraph_tasks[i]] * task_weights[subgraph_tasks[i]]
+        total_estimated_latency += tuner.best_costs[subgraph_tasks[i]] * 1000
+    # else:
+    #     best_costs = prev_data.tune_best_cost
+    #     prune_num = prev_data.PruneNum
+    #     # error_index = [16, 2, 3, 1, 0]
+    #     for i in range(len(error_index)):
+    #         best_costs[subgraph_tasks[error_index[i]]] = tuner.best_costs[i]
+    #     if tuner != None:
+    #         for i in list(tuner.prune_num.keys()):
+    #             prune_num[subgraph_tasks[error_index[i]]] = tuner.prune_num[i]
             
         # best_costs[task_index] = tuner.best_costs[0]
         # prune_num[task_index] = tuner.prune_num[0]
         
-        for i in range(data.Subgraph.NumConv2d):
-            task_times[i] = best_costs[subgraph_tasks[i]] * task_weights[subgraph_tasks[i]]
-            total_estimated_latency += best_costs[subgraph_tasks[i]] * 1000
+        # for i in range(data.Subgraph.NumConv2d):
+        #     task_times[i] = best_costs[subgraph_tasks[i]] * task_weights[subgraph_tasks[i]]
+        #     total_estimated_latency += best_costs[subgraph_tasks[i]] * 1000
         
     task_times_rank = np.argsort(task_times)
     task_times_rank = np.flip(task_times_rank)
@@ -493,23 +525,35 @@ def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 2
     logger.info('Current latency: {:>8.4f}, Total estimated latency: {:>8.4f}'.format(current_latency.mean(), total_estimated_latency))
     logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f}, Total estimated latency: {:>8.4f}\n'.format(budget, current_latency.mean(), total_estimated_latency))
     
-    if task_index == None:
-        result = OptimizerTVMOutput(task_times, task_times_rank,
-                                    tune_trials, 
-                                    current_latency,
-                                    total_estimated_latency,
-                                    subgraph_tasks,
-                                    tuner.prune_num,
-                                    tuner.best_costs)
-    else:
-        result = OptimizerTVMOutput(task_times, task_times_rank,
-                                    tune_trials, 
-                                    current_latency,
-                                    total_estimated_latency,
-                                    subgraph_tasks,
-                                    prune_num,
-                                    best_costs)
+    # if task_index == None:
+    #     result = OptimizerTVMOutput(task_times, task_times_rank,
+    #                                 tune_trials, 
+    #                                 current_latency,
+    #                                 total_estimated_latency,
+    #                                 subgraph_tasks,
+    #                                 tuner.prune_num,
+    #                                 tuner.best_costs)
+    # else:
+    result = OptimizerTVMOutput(task_times, task_times_rank,
+                                tune_trials, 
+                                current_latency,
+                                total_estimated_latency,
+                                subgraph_tasks,
+                                tuner.prune_num,
+                                tuner.best_costs)
+        
     with open(pkl, 'wb') as f:
         pickle.dump(result, f)
+        
+    with open(show_pkl, 'wb') as f:
+        pickle.dump([result.TuneTrials, 
+                     result.CurrentLatency,
+                     result.TotalEstimatedLatency, 
+                     result.SubgraphTasks,
+                     result.PruneNum,
+                     result.TaskTimes,
+                     result.TaskTimesRank,
+                     result.tune_best_cost], f)
+
 
     return result

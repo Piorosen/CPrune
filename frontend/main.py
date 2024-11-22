@@ -12,7 +12,7 @@ import pickle
 from cpruner import Logger, DeviceType
 from utils import *
 from models.implements import get_model_zoo
-from models.implements.cnn.mnist import LeNet
+from models.implements.cnn.cifar10 import ResNet18
 
 logger = Logger()
 
@@ -26,14 +26,15 @@ def main(args):
     device = torch.device('cpu')
     train_loader, val_loader, criterion = get_data_dataset(args.dataset, args.data_dir, args.batch_size, args.test_batch_size)
     # model = LeNet().to(device)
-    # model = models.resnet18(pretrained=True).to(device)
+    model = ResNet18().to(device)
+    model.load_state_dict(torch.load('./cifar10_model_300.pth'))
     
-    models = get_model_zoo()
-    model, file_name = models[args.model]
-    model = model(True, True)
+    # models = get_model_zoo()
+    # model, file_name = models[args.model]
+    # model = model(True, True)
+    
     os.makedirs(args.experiment_data_dir, exist_ok=True)
     
-
     input_size = get_input_size(args.dataset)
     dummy_input = get_dummy_input(input_size, args.batch_size).to(device)
     acc_requirement = args.accuracy_requirement
@@ -61,13 +62,19 @@ def main(args):
                 
         return top1, current_accuracy
 
-    def evaluator_top1(model):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = model.to(device)
-        result = test_top1(model, device, criterion, val_loader)
-        model = model.to(torch.device('cpu'))
-        return result
-    
+    def evaluator_top1(model, cache_file):
+        if cache_file != None and os.path.exists(cache_file):
+            with open(cache_file, 'rb') as f:
+                result, _ = pickle.load(f)
+        else:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model = model.to(device)
+            result, _ = test_top1(model, device, criterion, val_loader)
+            model = model.to(torch.device('cpu'))
+            if cache_file != None:
+                with open(cache_file, 'wb') as f:
+                    pickle.dump([result, result], f)
+        return result, result
     
     # ImageNet
     if args.dataset == 'imagenet':
@@ -82,8 +89,10 @@ def main(args):
     # CIFAR-10
     elif args.dataset == 'cifar10' or args.dataset == 'mnist':
         # pass
-        # _, accuracy = evaluator_top1(model)
-        print('Original model - Top-1 Accuracy: %s' %(accuracy))
+        # _, accuracy = evaluator_top1(model, None)
+        # print('Original model - Top-1 Accuracy: %s' %(accuracy))
+        
+        print('Original model - Top-1 Accuracy: %s' %(82.91))
         
     # module types to prune, only "Conv2d" supported for channel pruning
     if args.base_algo in ['l1', 'l2', 'fpgm']:
@@ -137,20 +146,20 @@ from types import SimpleNamespace
 if __name__ == '__main__':
     load_dotenv()
     args = SimpleNamespace(
-    accuracy_requirement=0.85,
-    dataset='imagenet',
+    accuracy_requirement=82.91 * 0.93 / 100,
+    dataset='cifar10',
     data_dir='/work/dataset',
     model='resnet18',
-    batch_size=128,
-    test_batch_size=128,  # 64
+    batch_size=512,
+    test_batch_size=512,  # 64
     fine_tune=True,
-    fine_tune_epochs=1,
-    experiment_data_dir='/work/experiments/fast_resnet18_task',
+    fine_tune_epochs=5,
+    experiment_data_dir='/work/experiments/manytime_rockpi_resnet18_error',
     base_algo='l1',
-    sparsity=0.1,
+    sparsity=0.5,
     log_interval=1000,  # 200
     speed_up=True,
-    tune_mode=0 # 0 : task, 1 : all, 2 : error
+    tune_mode=2 # 0 : task, 1 : all, 2 : error
     )
     print(args)
     main(args)

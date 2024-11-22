@@ -60,9 +60,9 @@ def get_files(model):
 
 def evaluate_tvm(mod, params, input_size, input_name, device_type, tvm_target, tvm_device_key, tvm_host, tvm_port, log_file):
     print("Compile...")
-    globals()[" __DATA__ERROR_WORKLOAD_KEY"] = None
-    if os.path.exists('tmp_get_error_from_tvm.txt'):
-        os.remove('tmp_get_error_from_tvm.txt')
+    # globals()[" __DATA__ERROR_WORKLOAD_KEY"] = None
+    # if os.path.exists('tmp_get_error_from_tvm.txt'):
+        # os.remove('tmp_get_error_from_tvm.txt')
     
     with auto_scheduler.ApplyHistoryBest(log_file):
         with tvm.transform.PassContext(opt_level=3, config={"relay.backend.use_auto_scheduler": True}):
@@ -70,14 +70,12 @@ def evaluate_tvm(mod, params, input_size, input_name, device_type, tvm_target, t
                 lib = relay.build_module.build(mod, params=params, target=tvm_target)
             else:
                 lib = relay.build(mod, params=params, target="opencl -device=mali", target_host=tvm_target)
-    error_list = []
-    with open('tmp_get_error_from_tvm.txt') as f:
-        error_list = f.readlines()    
-    if os.path.exists('tmp_get_error_from_tvm.txt'):
-        os.remove('tmp_get_error_from_tvm.txt')
-    
-    
-    print(error_list)
+    # error_list = []
+    # with open('tmp_get_error_from_tvm.txt') as f:
+    #     error_list = f.readlines()    
+    # if os.path.exists('tmp_get_error_from_tvm.txt'):
+    #     os.remove('tmp_get_error_from_tvm.txt')
+    # print(error_list)
     
     tmp = utils.tempdir()
     if False:
@@ -143,9 +141,9 @@ def main():
     
     # Add arguments for each of the provided variables
     parser.add_argument("--name", type=str, default='resnet18', help="Name of the model")
-    parser.add_argument("--model_pth", type=str, default='/work/experiments/fast_resnet18/tvm/001_000000_model.pth', help="Path to the model .pth file")
-    parser.add_argument("--mask_pth", type=str, default='/work/experiments/fast_resnet18/tvm/001_000000_mask.pth', help="Path to the mask .pth file")
-    parser.add_argument("--tvm_log", type=str, default='/work/experiments/fast_resnet18/tvm/001_000000.log', help="Path to the TVM log file")
+    parser.add_argument("--model_pth", type=str, default='/work/experiments/fast_resnet18_origin/tvm/099_000006_model.pth', help="Path to the model .pth file")
+    parser.add_argument("--mask_pth", type=str, default='/work/experiments/fast_resnet18_origin/tvm/099_000006_mask.pth', help="Path to the mask .pth file")
+    parser.add_argument("--tvm_log", type=str, default='/work/experiments/fast_resnet18_origin/tvm/099_000006.log', help="Path to the TVM log file")
     parser.add_argument("--tvm_target", type=str, default="llvm -mtriple=aarch64-linux-none", help="TVM target configuration")
     parser.add_argument("--tvm_devicekey", type=str, default='rockpi', help="TVM device key")
     parser.add_argument("--tvm_host", type=str, default='127.0.0.1', help="TVM tracker host address")
@@ -175,9 +173,9 @@ def main():
     model.to(device)
     model.eval()
 
-    model.load_state_dict(torch.load(args.model_pth))
-    m_speedup = ModelSpeedup(model, dummy_input, args.mask_pth, device)
-    m_speedup.speedup_model()
+    # model.load_state_dict(torch.load(args.model_pth))
+    # m_speedup = ModelSpeedup(model, dummy_input, args.mask_pth, device)
+    # m_speedup.speedup_model()
 
     # dummy_input = torch.randn((1,3,224,224))
     # torch.onnx.export(model,         # model being run 
@@ -205,7 +203,7 @@ def main():
     with tvm.transform.PassContext(opt_level=3):
         mod = seq(mod)
         
-    result = evaluate_tvm(mod, params, input_shape, input_name, 'cpu', args.tvm_target, args.tvm_devicekey, args.tvm_host, args.tvm_port, args.tvm_log)
+    result = evaluate_tvm(mod, params, input_shape, input_name, 'cpu', args.tvm_target, args.tvm_devicekey, args.tvm_host, args.tvm_port, './rockpi.log')
     with open(f'001_00000.json', 'w') as f:
         json.dump({'inference': result.tolist(), 'info': info, 'param': vars(args)}, f)
     # print(rrr)

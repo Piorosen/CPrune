@@ -4,6 +4,7 @@ from tvm import relay, auto_scheduler
 import numpy as np
 import torch
 from enum import Enum
+import pickle
 
 @dataclass 
 class ExtractSubgraph: 
@@ -26,11 +27,15 @@ class DeviceType(Enum):
 @dataclass 
 class OptimizerTVMInput:
     def __init__(self):
-        self.UseAndroid: bool = False
+        if False:
+            self.UseAndroid: bool = True
+            self.TVM_Target: str = "llvm -mtriple=aarch64-linux-android"
+        else:
+            self.UseAndroid: bool = False
+            self.TVM_Target: str = "llvm -mtriple=aarch64-linux-none"
         self.TVM_TrackerHost: str = "0.0.0.0"
         self.TVM_Archtecture: str = "aarch64"
         self.TVM_DataType: str = "float32"
-        self.TVM_Target: str = "llvm -mtriple=aarch64-linux-none"
         self.Subgraph = ExtractSubgraph()
       
     Model: Any
@@ -49,8 +54,9 @@ class OptimizerTVMInput:
     # target = "llvm -mtriple=%s-linux-android" % arch        
     # target = "llvm -mtriple=%s-linux-none" % arch
     
+    
 @dataclass 
-class OptimizerTVMOutput: 
+class OptimizerTVMOutput:
     def __init__(self, task_times, task_times_rank, tune_trials=0, current_latency=np.array([]), total_estimated_latency=0, subgraph_tasks=[], prune_num={}, tune_best_cost=[]):
         self.TuneTrials = tune_trials
         self.CurrentLatency = current_latency
