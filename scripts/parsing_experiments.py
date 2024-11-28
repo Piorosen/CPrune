@@ -1,6 +1,6 @@
 #%%
 import pickle
-with open('/work/experiments/manytime_rockpi_resnet18_error/tvm/baseline.pkl', 'rb') as f:
+with open('/work/experiments/manytime_sd865_resnet18_error/tvm/baseline.pkl', 'rb') as f:
     print(pickle.load(f))
 
 #%%
@@ -44,7 +44,7 @@ def _get_last_epoch(cnt, dirs):
     epoch = dd[-1].split('.')[0].split('_')[:2]
     return '_'.join(epoch)
 
-dirs = os.path.join('/work/experiments/fast_resnet18_error', 'tvm')
+dirs = os.path.join('/work/experiments/manytime_rockpi_resnet18_error', 'tvm')
 pk_max = _get_latest_iter(dirs)
 items = [_get_last_epoch(i, dirs) + '_best_op.pkl' for i in range(1, pk_max + 1)]
 logs = [_get_last_epoch(i, dirs) + '.log' for i in range(1, pk_max + 1)]
@@ -62,22 +62,21 @@ for i in range(len(time_data) -1):
     t.append(time_data[i + 1] - time_data[i])
 t = np.array(t)
 len(t)
-
 #%%
 
 time_g = np.array([os.path.getctime(os.path.join(dirs, i)) for i in items])
 time_e = np.array([os.path.getctime(os.path.join(dirs, i)) for i in logs])
 time_train_time = time_g - time_e
-#%%
-# %%
 itema = [os.path.join(dirs, x) for x in items]
 perf_item = [os.path.join(dirs, x) for x in perf]
 
 pick = []
-for item in itema:
-    with open(item, 'rb') as f:
+for item in range(len(itema)):
+    with open(itema[item], 'rb') as f:
         d = pickle.load(f)
         pick.append(d)
+        # if d['op_name'] == 'layer4.1.conv2':
+            # pick.append([d['sparsity'], d['ch_num'], item])
 len(pick)
 
 perf_list = []
@@ -87,26 +86,34 @@ for item in perf_item:
         perf_list.append(d.CurrentLatency.mean())
 len(perf_list)
 print(perf_list)
-#%%
 
 # %%
 df = pd.DataFrame(pick)
 df = df.drop(columns=['masks'])
 time_conv = np.vectorize(lambda x: f'{int(x // 60)}m {int(x) % 60}s')
+time_train_time = np.where(1000 > time_train_time, time_train_time, 110)
 tvm_tune = t- time_train_time
-max_time = np.where(time_train_time > tvm_tune, time_train_time, tvm_tune)  + 6
+tvm_tune = np.where(10000 > tvm_tune, tvm_tune, 1000)
+
+max_time = np.where(time_train_time > tvm_tune, time_train_time, tvm_tune) + 6
+
+
+# tvm_tune = np.where(10000 > tvm_tune, tvm_tune, 1000)
+# max_time = np.where(4000 > max_time, max_time + (40*60), max_time)
+# max_time = np.where(10000 > max_time, max_time, min(max_time) + 50*60)
+
 df['time'] = time_conv(max_time)
 df['train'] = time_conv(time_train_time)
 df['tvm_tune'] = time_conv(tvm_tune)
+
 # weight_mask = df.iloc[16]['masks']['weight_mask'] #
 # num_ones = torch.sum(weight_mask == 1).item()
 
 # total_elements = weight_mask.numel()
 print(df.to_csv())
+print(max_time)
 #%%
-
-# np.max(time_train_time, t)
-# %%
+print(time_train_time)
 #%%
 import matplotlib.pyplot as plt
 time_index = np.array(t[:99]).cumsum() / 3600
@@ -134,9 +141,8 @@ fig.tight_layout()
 plt.savefig('a.png')
 plt.show()
 
-
 plt.figure(figsize=(10, 5))
-plt.plot(df.index + 1, np.array(tvm_tune) / 60, label='TVM Tune')
+# plt.plot(df.index + 1, np.array(tvm_tune) / 60, label='TVM Tune')
 plt.plot(df.index + 1, np.array(time_train_time) / 60, label='Training')
 plt.plot(df.index + 1, np.array(max_time) / 60, label='Each Tune Time')
 plt.xlabel('Trials')
@@ -150,13 +156,10 @@ plt.show()
 
 # %%
 # %%
-# %%
-
-
 # %%a
 
 # %%
-# print()
+# print()   
 # %%
 with open(os.path.join(dirs, 'baseline.pkl'), 'rb') as f:
     print(pickle.load(f).PruneNum)
