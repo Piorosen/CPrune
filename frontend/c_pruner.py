@@ -314,7 +314,7 @@ class CPruner(Pruner):
         
         return cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked, target_index
 
-    def compress(self, tune_mode, short_num=5):
+    def compress(self, tune_mode, short_num=5, early_stop=50):
         """
         Compress the model.
 
@@ -355,7 +355,7 @@ class CPruner(Pruner):
         os.makedirs(tune_first, exist_ok=True)
         tune_first = os.path.join(tune_first, "baseline")
         write_log(0,0, 'start', 'optimizer_tvm', self._experiment_data_dir)
-        output = optimizer_tvm.optimizing_all(input, tune_first, previous_file='')
+        output = optimizer_tvm.optimizing_all(input, tune_first, previous_file='', early_stop=early_stop)
         write_log(0,0, 'end', 'optimizer_tvm', self._experiment_data_dir)
         prev_tune_name = tune_first
 
@@ -398,8 +398,8 @@ class CPruner(Pruner):
                         
         #     output_model = tune_name + "_model.pth"
         #     output_mask = tune_name + "_mask.pth"
-        #     model_to_Prune.load_state_dict(torch.load(output_model))
-        #     # self.load_model_state_dict(torch.load(output_model))
+        #     model_to_Prune.load_state_dict(torch.load(output_mode, map_location='cpu'l))
+        #     # self.load_model_state_dict(torch.load(output_model, map_location='cpu'))
             
         # pruning_iteration += 1
         
@@ -475,13 +475,13 @@ class CPruner(Pruner):
                         _, epoch = self._get_last_epoch(pruning_iteration)
                         prev_tune = os.path.join(self._experiment_data_dir, 'tvm', epoch)
                         prev_model = prev_tune + '_model_train.pth'
-                        model.load_state_dict(torch.load(prev_model))
+                        model.load_state_dict(torch.load(prev_model, map_location='cpu'))
                         prev_mask = prev_tune + '_mask_train.pth'
                         m_speedup = ModelSpeedup(model, self._dummy_input, prev_mask, device)
                         # m_speedup = ModelSpeedup(model, self._dummy_input, prev_mask, device)
                         m_speedup.speedup_model()
                     except:
-                        model.load_state_dict(torch.load(output_model))
+                        model.load_state_dict(torch.load(output_model, map_location='cpu'))
                         m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
                         m_speedup.speedup_model()
                         # added 1: Autotune + TVM build
@@ -507,7 +507,7 @@ class CPruner(Pruner):
                 input2.InputSize = self._input_size
                 input2.DeviceType = self._cpu_or_gpu
                 input2.Subgraph = subgraph
-                input2.TVM_DeviceKey = self.self._tvm_hardward_id
+                input2.TVM_DeviceKey = self._tvm_hardward_id
                 input2.TVM_TrackerHost = os.environ.get("TVM_TRACKER_HOST", "0.0.0.0")
                 input2.TVM_TrackerPort = int(os.environ["TVM_TRACKER_PORT"])
                 
@@ -518,11 +518,11 @@ class CPruner(Pruner):
                 write_log(pruning_iteration,cnt, 'start', f'optimizer_tvm (tune_mode : {tune_mode})', self._experiment_data_dir)
                 
                 if tune_mode == 0:
-                    output2 = optimizer_tvm.optimizing_task_index(input2, tune_name, task_index=task_index, previous_file=prev_tune_name)
+                    output2 = optimizer_tvm.optimizing_task_index(input2, tune_name, task_index=task_index, previous_file=prev_tune_name, early_stop=early_stop)
                 elif tune_mode == 1:
-                    output2 = optimizer_tvm.optimizing_all(input2, tune_name, task_index=None, previous_file=prev_tune_name)
+                    output2 = optimizer_tvm.optimizing_all(input2, tune_name, task_index=None, previous_file=None, early_stop=early_stop)
                 elif tune_mode == 2:
-                    output2 = optimizer_tvm.optimizing_error(input2, tune_name, task_index=True, previous_file=prev_tune_name)
+                    output2 = optimizer_tvm.optimizing_error(input2, tune_name, task_index=True, previous_file=prev_tune_name, early_stop=early_stop)
     
     
                 prev_tune_name = tune_name
@@ -657,7 +657,7 @@ class CPruner(Pruner):
                     pickle.dump(self._config_list_generated, f)
                     
                 # update weights parameters
-                model_to_Prune.load_state_dict(torch.load(output_model_train))
+                model_to_Prune.load_state_dict(torch.load(output_model_train, map_location='cpu'))
                 logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f}'.format(budget, best_op['latency']))
                 logger.info('Budget: {:>8.4f}, Current latency: {:>8.4f} \n'.format(budget, best_op['latency']))
 
@@ -671,10 +671,10 @@ class CPruner(Pruner):
         write_log(-1, -1, 'end', 'pruning', self._experiment_data_dir)
 
         # load weights parameters
-        self.load_model_state_dict(torch.load(output_model_train))
+        self.load_model_state_dict(torch.load(output_model_train, map_location='cpu'))
 
         model = copy.deepcopy(self._original_model)
-        # model.load_state_dict(torch.load(output_model))
+        # model.load_state_dict(torch.load(output_model, map_location='cpu'))
         # m_speedup = ModelSpeedup(model, self._dummy_input, output_mask, device)
         # m_speedup.speedup_model()
         

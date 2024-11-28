@@ -27,7 +27,7 @@ def main(args):
     train_loader, val_loader, criterion = get_data_dataset(args.dataset, args.data_dir, args.batch_size, args.test_batch_size)
     # model = LeNet().to(device)
     model = ResNet18().to(device)
-    model.load_state_dict(torch.load('./cifar10_model_300.pth'))
+    model.load_state_dict(torch.load('./cifar10_model_300.pth', map_location='cpu'))
     
     # models = get_model_zoo()
     # model, file_name = models[args.model]
@@ -118,7 +118,7 @@ def main(args):
                      acc_requirement=acc_requirement)
     
     # # Pruner.compress() returns the masked model
-    model = pruner.compress(args.tune_mode, short_num=args.fine_tune_epochs)
+    model = pruner.compress(args.tune_mode, short_num=args.fine_tune_epochs, early_stop=args.early_stop)
     
     # # model speed up
     # if args.speed_up:
@@ -158,9 +158,10 @@ if __name__ == '__main__':
     fine_tune_epochs=5,
     tvm_hardward_id='sd865',
     tvm_target_os_is_android=True,
-    experiment_data_dir='/work/experiments/manytime_sd865_resnet18_error',
+    experiment_data_dir='/work/experiments/manytime_sd865_resnet18_all_none',
     base_algo='l1',
     sparsity=0.5,
+    early_stop = 1e7,
     log_interval=1000,  # 200
     speed_up=True,
     tune_mode=1 # 0 : task, 1 : all, 2 : error

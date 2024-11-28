@@ -82,9 +82,8 @@ def print_task_info(task):
 
 def load_mode(pth: str = './cifar10_model_300.pth'):
     device = torch.device("cpu")
-    model = ResNet18()
-    model.load_state_dict(torch.load(pth))
-    model.to(device)
+    model = ResNet18().to(device)
+    model.load_state_dict(torch.load(pth, map_location=torch.device('cpu') ))
     model.eval()
     return model
 
@@ -197,3 +196,41 @@ def task_to_layer(model, task_id, pos, subgraph_tasks):
             list_depen.append(j)
 
     return list_depen
+
+def safe_int(value):
+    try:
+        return int(value)
+    except ValueError:
+        return None  # 혹은 원하는 값을 반환
+    
+def get_latest_iter(experiment_data_dir = '/work/experiments/manytime_rockpi_resnet18_error'):
+    dirs = os.path.join(experiment_data_dir, 'tvm')
+    dirs = os.listdir(dirs)
+    pk = list(filter(lambda x: x[-3:] == 'pkl', dirs))
+    pk = list(filter(lambda x: safe_int(x.split('_')[0]), pk))
+    pk = list(filter(lambda x: x.split('_')[-1] == 'op.pkl', pk))
+    pk = list(map(lambda x: x.split("_")[0], pk))
+
+    if len(pk) == 0:
+        return 0
+    else:
+        pk_max = max(list(map(lambda x: int(x), pk)))
+        return pk_max
+
+def get_last_epoch(experiment_data_dir, cnt=-1):
+    if cnt == -1:
+        pk_max = get_latest_iter(experiment_data_dir)
+    else:
+        pk_max = cnt
+    if pk_max == 0:
+        return 0, None
+    
+    iter = str(pk_max).zfill(3)
+    dirs = os.path.join(experiment_data_dir, 'tvm')
+    dirs = os.listdir(dirs)
+    dirs.sort()
+    dd = list(filter(lambda x: x[:3] == iter, dirs))
+    epoch = dd[-1].split('.')[0].split('_')[:2]
+    return pk_max, '_'.join(epoch)
+
+
