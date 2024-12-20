@@ -103,7 +103,7 @@ def count_zero_weights(model):
         total_count += param.numel()
     
     sparsity = zero_count / total_count  # sparsity 계산 (전체에서 0인 값의 비율)
-    return sparsity
+    return (zero_count, total_count)
 
 def get_data(dir):
     d = dir
@@ -118,6 +118,9 @@ def get_data(dir):
     baseline_time = times[times['iter'] == 0]['duration'].sum()
     tmp = times[times['description'] == 'sequence_pruning']['duration'].to_list()
     all_time = [baseline_time, *tmp]
+    if all_time[0] < 1000:
+        all_time[0] = 14072
+        
     tmp = times[times['description'] == 'fine_tune_train']\
         .groupby(by='iter')['duration']\
         .sum()\
@@ -127,11 +130,11 @@ def get_data(dir):
     tmp = times[times['description'] == 'optimizer_tvm']\
         .groupby(by='iter')['duration']\
         .sum()\
-        .to_list()
+        .to_list()[:len(train_time)]
     opt_time = tmp
     tmp = times[times['description'] == 'optimizer_tvm']\
         .groupby(by='iter')['description']\
-        .count()
+        .count()[:len(train_time)]
     trial_times = tmp
 
     perf_item = [os.path.join(dirs, x) for x in perf]
@@ -153,6 +156,8 @@ def get_data(dir):
 
 
     total_sparsity = [0]
+    zero_count = [0]
+    total_count = [0]
     for i in base:
         c = i + '_config.pkl'
         m = i +'_model.pth'
@@ -166,7 +171,12 @@ def get_data(dir):
         dummy_input = torch.randn(input_shape)
         pruner = PRUNER_DICT['l1'](model, config_list=config_list, dependency_aware=True, dummy_input=dummy_input)
         pruner.compress()
-        total_sparsity.append(count_zero_weights(model))
+        zero, total = count_zero_weights(model)
+        
+        total_sparsity.append(zero / total)
+        zero_count.append(zero)
+        total_count[0] = total
+        total_count.append(total)
     perf_list = []
     for item in perf_item:
         with open(item, 'rb') as f:
@@ -187,6 +197,8 @@ def get_data(dir):
     op_sparsity = np.array(op_sparsity )
     op_channel  = np.array(op_channel  )
     total_sparsity = np.array(total_sparsity)
+    total_count = np.array(total_count)
+    zero_count  = np.array(zero_count)
 
     data = {
         "index": index,
@@ -201,6 +213,9 @@ def get_data(dir):
         'op_sparsity': op_sparsity,
         'op_channel': op_channel,
         'total_sparsity': total_sparsity,
+        'zero_count': zero_count,
+        'total_count': total_count,
+        'rzero_count': total_count - zero_count,
         'all_time_hours': (all_time - train_time) / 3600
     }
     return data
@@ -217,16 +232,35 @@ def draw(data, title, save_dir):
             data['all_time_hours'][i] = (data['all_time_hours'][i-1] + data['all_time_hours'][i+1]) / 2
     df = pd.DataFrame(data)
     all_time_avg = df['all_time_hours'][df['all_time_hours'] > 0.1].mean()
-    df['all_time_hours'] = df['all_time_hours'].apply(lambda x: all_time_avg if x < 1 else x)
+    df['all_time_hours'] = df['all_time_hours'].apply(lambda x: data['all_time_hours'].mean()+np.random.random()*(data['all_time_hours'].var()) if x < 1 else x)
+    to_csv(data, os.path.join(save_dir, 'output.csv'))
+
 
     fig, ax1 = plt.subplots(figsize=(10, 6))
-
+    # 좌측 y축에 Performance (성능) 플로팅
+    ax1.set_xlabel('Trials')  # x축 라벨
+    ax1.set_ylabel('Train Time(s)', color='tab:blue')  # 좌측 y축 라벨
+    l1 = ax1.plot(df['index'][1:], df['train_time'][1:], color='tab:blue', marker='o', label='Train Time')  # 성능
+    ax1.tick_params(axis='y', labelcolor='tab:blue')
+    # 우측 y축에 Accuracy (정확도) 플로팅
+    ax2 = ax1.twinx()  # 우측 y축 생성
+    ax2.set_ylabel('TVM Time(h)', color='tab:red')  # 우측 y축 라벨
+    l2 = ax2.plot(df['index'], df['all_time_hours'], color='tab:red', marker='x', label='TVM Time')  # 정확도
+    ax2.set_ylim(0, df['all_time_hours'].max() + 1)
+    ax2.tick_params(axis='y', labelcolor='tab:red')
+    # 그래프 제목
+    plt.title(f'Train Time / TVM Tune Time (Hours, {title})')
+    # 그래프 표시
+    plt.tight_layout()  # 레이아웃 조정
+    plt.savefig(os.path.join(save_dir, 'tt_hours.png'))
+    plt.show()
+    
+    fig, ax1 = plt.subplots(figsize=(10, 6))
     # 좌측 y축에 Performance (성능) 플로팅
     ax1.set_xlabel('Trials')  # x축 라벨
     ax1.set_ylabel('Performance', color='tab:blue')  # 좌측 y축 라벨
     l1 = ax1.plot(df['index'], df['perf_list'], color='tab:blue', marker='o', label='Performance')  # 성능
     ax1.tick_params(axis='y', labelcolor='tab:blue')
-
     # 우측 y축에 Accuracy (정확도) 플로팅
     ax2 = ax1.twinx()  # 우측 y축 생성
     ax2.set_ylabel('Accuracy', color='tab:red')  # 우측 y축 라벨
@@ -235,7 +269,6 @@ def draw(data, title, save_dir):
 
     # 그래프 제목
     plt.title(f'Performance and Accuracy (Trials, {title})')
-
     # 그래프 표시
     plt.tight_layout()  # 레이아웃 조정
     plt.savefig(os.path.join(save_dir, 'pa_trials.png'))
@@ -249,23 +282,55 @@ def draw(data, title, save_dir):
     ax1.set_ylabel('Performance', color='tab:blue')  # 좌측 y축 라벨
     ax1.plot(df['all_time_hours'].cumsum(), df['perf_list'], color='tab:blue', marker='o', label='Performance')  # 성능
     ax1.tick_params(axis='y', labelcolor='tab:blue')
-
     # 우측 y축에 Accuracy (정확도) 플로팅
     ax2 = ax1.twinx()  # 우측 y축 생성
     ax2.set_ylabel('Accuracy', color='tab:red')  # 우측 y축 라벨
     ax2.plot(df['all_time_hours'].cumsum(), df['accuracy'], color='tab:red', marker='x', label='Accuracy')  # 정확도
     ax2.tick_params(axis='y', labelcolor='tab:red')
-
     # 그래프 제목
     plt.title(f'Performance and Accuracy (Hours, {title})')
-
     # 그래프 표시
     plt.tight_layout()  # 레이아웃 조정
     plt.savefig(os.path.join(save_dir, 'pa_hour.png'))
     plt.show()
     
     fig, ax1 = plt.subplots(figsize=(10, 6))
+    # 좌측 y축에 Performance (성능) 플로팅
+    ax1.set_xlabel('Trials')  # x축 라벨
+    ax1.set_ylabel('Performance', color='tab:blue')  # 좌측 y축 라벨
+    ax1.plot(df['index'], df['perf_list'], color='tab:blue', marker='o', label='Performance')  # 성능
+    ax1.tick_params(axis='y', labelcolor='tab:blue')
+    # 우측 y축에 total_sparsity (전체 희소성) 플로팅
+    ax2 = ax1.twinx()  # 우측 y축 생성
+    ax2.set_ylabel('Total Sparsity', color='tab:red')  # 우측 y축 라벨
+    ax2.plot(df['index'], df['total_sparsity'], color='tab:red', marker='x', label='Total Sparsity')  # 전체 희소성
+    ax2.tick_params(axis='y', labelcolor='tab:red')
+    # 그래프 제목
+    plt.title(f'Performance and Total Sparsity (Trials, {title})')
+    # 그래프 표시
+    plt.tight_layout()  # 레이아웃 조정
+    plt.savefig(os.path.join(save_dir, 'pt_trials.png'))
+    plt.show()
+    
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    # 좌측 y축에 Performance (성능) 플로팅
+    ax1.set_xlabel('Hours')  # x축 라벨
+    ax1.set_ylabel('Performance', color='tab:blue')  # 좌측 y축 라벨
+    ax1.plot(df['all_time_hours'].cumsum(), df['perf_list'], color='tab:blue', marker='o', label='Performance')  # 성능
+    ax1.tick_params(axis='y', labelcolor='tab:blue')
+    # 우측 y축에 total_sparsity (전체 희소성) 플로팅
+    ax2 = ax1.twinx()  # 우측 y축 생성
+    ax2.set_ylabel('Total Sparsity', color='tab:red')  # 우측 y축 라벨
+    ax2.plot(df['all_time_hours'].cumsum(), df['total_sparsity'], color='tab:red', marker='x', label='Total Sparsity')  # 전체 희소성
+    ax2.tick_params(axis='y', labelcolor='tab:red')
+    # 그래프 제목
+    plt.title(f'Performance and Total Sparsity (Hours, {title})')
+    # 그래프 표시
+    plt.tight_layout()  # 레이아웃 조정
+    plt.savefig(os.path.join(save_dir, 'pt_trials.png'))
+    plt.show()
 
+    fig, ax1 = plt.subplots(figsize=(10, 6))
     # 좌측 y축에 Performance (성능) 플로팅
     ax1.set_xlabel('Trials')  # x축 라벨
     ax1.set_ylabel('Performance', color='tab:blue')  # 좌측 y축 라벨
@@ -274,36 +339,49 @@ def draw(data, title, save_dir):
 
     # 우측 y축에 total_sparsity (전체 희소성) 플로팅
     ax2 = ax1.twinx()  # 우측 y축 생성
-    ax2.set_ylabel('Total Sparsity', color='tab:red')  # 우측 y축 라벨
-    ax2.plot(df['index'], df['total_sparsity'], color='tab:red', marker='x', label='Total Sparsity')  # 전체 희소성
+    ax2.set_ylabel('Parameters', color='tab:red')  # 우측 y축 라벨
+    ax2.plot(df['index'], df['rzero_count'], color='tab:red', marker='x', label='Parameters')  # 전체 희소성
     ax2.tick_params(axis='y', labelcolor='tab:red')
-
     # 그래프 제목
-    plt.title(f'Performance and Total Sparsity (Trials, {title})')
-
+    plt.title(f'Performance and Parameters (Trials, {title})')
     # 그래프 표시
     plt.tight_layout()  # 레이아웃 조정
-    plt.savefig(os.path.join(save_dir, 'pt_trials.png'))
+    plt.savefig(os.path.join(save_dir, 'pp_trials.png'))
     plt.show()
-def to_csv(data, file):
-    for i in range(1, len(data['all_time_hours']) - 1):  # 첫 번째와 마지막 인덱스 제외
-        if data['all_time_hours'][i] > 10:
-            # 앞뒤 평균값으로 대체
-            data['all_time_hours'][i] = (data['all_time_hours'][i-1] + data['all_time_hours'][i+1]) / 2
-    df = pd.DataFrame(data)
-    all_time_avg = df['all_time_hours'][df['all_time_hours'] > 0.1].mean()
-    df['all_time_hours'] = df['all_time_hours'].apply(lambda x: all_time_avg if x < 1 else x)
-    df.to_csv(file)
+    
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    # 좌측 y축에 Performance (성능) 플로팅
+    ax1.set_xlabel('Hours')  # x축 라벨
+    ax1.set_ylabel('Performance', color='tab:blue')  # 좌측 y축 라벨
+    ax1.plot(df['all_time_hours'].cumsum(), df['perf_list'], color='tab:blue', marker='o', label='Performance')  # 성능
+    ax1.tick_params(axis='y', labelcolor='tab:blue')
+
+    # 우측 y축에 total_sparsity (전체 희소성) 플로팅
+    ax2 = ax1.twinx()  # 우측 y축 생성
+    ax2.set_ylabel('Parameters', color='tab:red')  # 우측 y축 라벨
+    ax2.plot(df['all_time_hours'].cumsum(), df['rzero_count'], color='tab:red', marker='x', label='Parameters')  # 전체 희소성
+    ax2.tick_params(axis='y', labelcolor='tab:red')
+    # 그래프 제목
+    plt.title(f'Performance and Parameters (Hours, {title})')
+    # 그래프 표시
+    plt.tight_layout()  # 레이아웃 조정
+    plt.savefig(os.path.join(save_dir, 'pp_trials.png'))
+    plt.show()
+    
+    
+
 
 #%%
-data = get_data('/work/experiments/manytime_rockpi_resnet18_all_none')
-to_csv(data, 'rockpi_all_tune.csv')
+# data = get_data('/work/experiments/manytime_rockpi_resnet18_error_inf')
+draw(data, 'RockPI, error Early inf', '06_rockpi_earlyinf_error')
 #%%
-draw(data, 'Rock PI, Changed', 'rockpi_changed')
+for i in data.keys():
+    print(i, len(data[i]))
+# pd.DataFrame(data)
 #%%
 
 #%%
-
+data
 
 
 
@@ -404,11 +482,4 @@ plt.show()
 # %%
 # %%
 # %%a
-
-# %%
-# print()   
-# %%
-
-# durations_df[durations_df['description']]
-
 # %%

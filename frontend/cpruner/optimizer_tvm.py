@@ -210,6 +210,8 @@ def optimizing_all(data: OptimizerTVMInput, load_log=None, at_least_trials = 740
     return result
 
 def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 740, num_per_round = 60, runner_number = 10, runner_repeat = 2, timeout=200, task_index=None, previous_file=None, early_stop=50) -> OptimizerTVMOutput:
+    from tvm.auto_scheduler import dispatcher
+    
     log_file = "%s.log" % (load_log)
     pkl = "%s.pkl" % (load_log)
     show_pkl = "%s_show.pkl" % (load_log)
@@ -248,8 +250,10 @@ def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 7
     with tvm.transform.PassContext(opt_level=3):
         mod = seq(mod)
     
-    if os.path.exists('/work/tmp_get_error_from_tvm.txt'):
-        os.remove('/work/tmp_get_error_from_tvm.txt')
+    
+    if os.path.exists(dispatcher.DATA_FILE_NAME):
+        os.remove(dispatcher.DATA_FILE_NAME)
+        
     with auto_scheduler.ApplyHistoryBest(log_file):
         with tvm.transform.PassContext(opt_level=3, config={"relay.backend.use_auto_scheduler": True}):
             if data.DeviceType == DeviceType.CPU:
@@ -257,11 +261,14 @@ def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 7
             else:
                 _ = relay.build(mod, params=params, target="opencl -device=mali", target_host=data.TVM_Target)
     error_list = []
-    if os.path.exists('/work/tmp_get_error_from_tvm.txt'):
-        with open('/work/tmp_get_error_from_tvm.txt') as f:
+    if os.path.exists(dispatcher.DATA_FILE_NAME):
+        with open(dispatcher.DATA_FILE_NAME) as f:
             error_list = f.readlines()    
-    if os.path.exists('/work/tmp_get_error_from_tvm.txt'):
-        os.remove('/work/tmp_get_error_from_tvm.txt')
+            
+    if os.path.exists(dispatcher.DATA_FILE_NAME):
+        os.remove(dispatcher.DATA_FILE_NAME)
+    else:
+        raise "Why you havent DATAFILE?"
     
     #################### Extract search tasks ###################
     print("Extract tasks...")
@@ -305,7 +312,7 @@ def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 7
         # tasks = [tasks[x] for x in error_index]
         # tune_task_weights = [task_weights[x] for x in error_index]
         tune_task_weights = task_weights
-        tune_trials = (at_least_trials + num_per_round) * len(tasks) #(conv2d_num + others_num)
+        tune_trials = (at_least_trials + num_per_round) * len(error_index) #(conv2d_num + others_num)
     else:
         tune_task_weights = task_weights
         tune_trials = (at_least_trials + num_per_round) * len(tasks) #(conv2d_num + others_num)        
@@ -328,7 +335,7 @@ def optimizing_error(data: OptimizerTVMInput, load_log=None, at_least_trials = 7
             early_stopping=int(early_stop),
             num_measures_per_round = num_per_round,
         )
-        tuner.tune(tune_option)
+        tuner.tune(tune_option, fast_tune=True)
     total_estimated_latency = 0
         
     # if task_index == None:
