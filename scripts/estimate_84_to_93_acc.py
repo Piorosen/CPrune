@@ -1,8 +1,5 @@
 #%%
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend')))
-from c_pruner import CPruner
-sys.path.pop(0)
 from types import SimpleNamespace
 from dotenv import load_dotenv
 import copy
@@ -19,8 +16,7 @@ from utils import train, test_top1, get_data_dataset
 from nni.compression.pytorch import ModelSpeedup
 from resnet import ResNet18
 
-
-
+torch.cuda.set_device(1)
 def generate_random_string(length=16):
     characters = string.ascii_letters + string.digits
     random_string = ''.join(random.choices(characters, k=length))
@@ -109,16 +105,19 @@ def accuracy_convert(dir, export, base_pth = 'cifar10_resnet18_94.7.pth'):
     for index in range(1, len(epoch)):
         e = epoch[index]
         dummy_input = torch.randn([1,3,32,32])
+        print(e)
         pruner = PRUNER_DICT['l1'](copy.deepcopy(origin_model), e, dependency_aware=True, dummy_input=dummy_input)
         model_masked = pruner.compress()
         pruner.export_model(os.path.join(project, f'tmp.pth'), 
                             os.path.join(project, f'{index:04}_mask.pth'))
         
         optimizer = torch.optim.SGD(model_masked.parameters(), lr=0.0001, momentum=0.9, weight_decay=5e-4)
+        none_acc = evaluator_top1(model_masked)
         short_term_trainer(model_masked, optimizer, epochs=5)
         acc = evaluator_top1(model_masked)
+        predict_acc.append(none_acc)
         predict_acc.append(acc)
-        # model.load_state_dict(model_masked.state_dict())
+        
         pruner.export_model(os.path.join(project, f'{index:04}_model.pth'), 
                             os.path.join(project, f'tmp.pth'))
         # m_speedup = ModelSpeedup(origin_model, dummy_input, os.path.join(project, f'{index:04}_mask.pth'), torch.device('cpu'))
@@ -132,7 +131,7 @@ file_list = [#'manytime_rockpi_resnet18_all_none',
              #'manytime_rockpi_resnet18_error_inf',
              #'manytime_sd865_resnet18_all_earlystop_50',
              #'manytime_sd865_resnet18_all_none',
-             'manytime_sd865-1_resnet18_error_early300',
+            #  'manytime_sd865-1_resnet18_error_early300',
              'manytime_sd865-3_resnet18_error_early10000000.0']
 
 for item in file_list:

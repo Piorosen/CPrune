@@ -12,6 +12,10 @@ RUN apt-get update && \
 
 WORKDIR /work
 
+RUN useradd -m -s /bin/bash chacha && \
+    echo "chacha:chacha" | chpasswd
+RUN usermod -aG sudo chacha
+
 RUN apt-get update
 RUN apt-get update && apt-get install -y openssh-server && \
         mkdir /var/run/sshd && \
