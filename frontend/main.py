@@ -2,6 +2,7 @@
 
 from dotenv import load_dotenv
 
+from tvm.auto_scheduler import dispatcher
 import os
 import torch.utils.data
 import torchvision.models as models
@@ -13,9 +14,13 @@ from cpruner import Logger, DeviceType
 from utils import *
 from models.implements import get_model_zoo
 from models.implements.cnn.cifar10 import ResNet18
+import random
+import string
+
+torch.cuda.set_device(1)
+
 
 logger = Logger()
-
 ###########################################################
 def main(args):
     cpu_or_gpu = DeviceType.CPU
@@ -118,7 +123,7 @@ def main(args):
                      acc_requirement=acc_requirement)
     
     # # Pruner.compress() returns the masked model
-    model = pruner.compress(args.tune_mode, short_num=args.fine_tune_epochs, early_stop=args.early_stop)
+    model = pruner.compress(args.tune_mode, short_num=args.fine_tune_epochs, early_stop=args.early_stop, min_pruning_ratio=args.min_pruning_ratio)
     
     # # model speed up
     # if args.speed_up:
@@ -139,15 +144,31 @@ def main(args):
     #      ) 
     
     # export_model('./export')
-    
-
 #%%
+
+def generate_random_string(length=16):
+    characters = string.ascii_letters + string.digits
+    random_string = ''.join(random.choices(characters, k=length))
+    return random_string
 
 from types import SimpleNamespace
  
 if __name__ == '__main__':
     load_dotenv()
+    device = 'sd865-3'
+    early_stop = 1e7
+    min_pruning_ratio = 0.2
+    tune_mode = 1
+    
+    text = 'error' if tune_mode == 2 else 'all'
+    dispatcher.DATA_FILE_NAME = f'/work/tmp_get_error_from_tvm_{generate_random_string()}.txt'
     args = SimpleNamespace(
+    tune_mode=tune_mode, # 0 : task, 1 : all, 2 : error
+    experiment_data_dir=f'/work/experiments/manytime_{device}_resnet18_{text}_early{early_stop}_min{min_pruning_ratio}',
+    tvm_target_os_is_android=False if device == 'rockpi' else True,
+    tvm_hardward_id=device,
+    early_stop = early_stop, #ie7
+    min_pruning_ratio = min_pruning_ratio,
     accuracy_requirement=82.91 * 0.93 / 100,
     dataset='cifar10',
     data_dir='/work/dataset',
@@ -156,15 +177,10 @@ if __name__ == '__main__':
     test_batch_size=512,  # 64
     fine_tune=True,
     fine_tune_epochs=5,
-    tvm_hardward_id='sd865',
-    tvm_target_os_is_android=True,
-    experiment_data_dir='/work/experiments/manytime_sd865_resnet18_all_none',
     base_algo='l1',
     sparsity=0.5,
-    early_stop = 1e7,
     log_interval=1000,  # 200
     speed_up=True,
-    tune_mode=1 # 0 : task, 1 : all, 2 : error
     )
     print(args)
     main(args)

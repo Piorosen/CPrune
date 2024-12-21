@@ -372,114 +372,117 @@ def draw(data, title, save_dir):
 
 
 #%%
-# data = get_data('/work/experiments/manytime_rockpi_resnet18_error_inf')
-draw(data, 'RockPI, error Early inf', '06_rockpi_earlyinf_error')
-#%%
-for i in data.keys():
-    print(i, len(data[i]))
-# pd.DataFrame(data)
-#%%
+if __name__ == '__main__':
+    data = get_data('/work/experiments/manytime_rockpi_resnet18_error_inf')
+    draw(data, 'RockPI, error Early inf', '06_rockpi_earlyinf_error')
+    exit(0)
+    
+    #%%
+    for i in data.keys():
+        print(i, len(data[i]))
+    # pd.DataFrame(data)
+    #%%
 
-#%%
-data
-
-
-
-
-
+    #%%
+    data
 
 
 
 
 
 
-#%%
-#%%
-#%%
-#%%
-#%%
-df.to_csv('./result.csv')
-
-# Plotting each column
-plt.figure(figsize=(10, 6))
-
-# Adding labels, legend, and title
-plt.xlabel("Index")
-plt.ylabel("Values")
-plt.title("Visualization of Different Metrics")
-plt.legend()
-plt.grid(True)
-
-# Show the plot
-plt.show()
-
-# %%
-df = pd.DataFrame(pick)
-df = df.drop(columns=['masks'])
-time_conv = np.vectorize(lambda x: f'{int(x // 60)}m {int(x) % 60}s')
-# time_train_time = np.where(1000 > time_train_time, time_train_time, 110)
-tvm_tune = t- time_train_time
-# tvm_tune = np.where(10000 > tvm_tune, tvm_tune, 1000)
-
-max_time = np.where(time_train_time > tvm_tune, time_train_time, tvm_tune) + 6
 
 
-# tvm_tune = np.where(10000 > tvm_tune, tvm_tune, 1000)
-# max_time = np.where(4000 > max_time, max_time + (40*60), max_time)
-# max_time = np.where(10000 > max_time, max_time, min(max_time) + 50*60)
 
-df['time'] = time_conv(max_time)
-df['train'] = time_conv(time_train_time)
-df['tvm_tune'] = time_conv(tvm_tune)
 
-# weight_mask = df.iloc[16]['masks']['weight_mask'] #
-# num_ones = torch.sum(weight_mask == 1).item()
 
-# total_elements = weight_mask.numel()
-print(df.to_csv())
-#%%
-#%%
-import matplotlib.pyplot as plt
-time_index = np.array(t[:99]).cumsum() / 3600
-plt.style.use('default')
-# Figure와 첫 번째 y축 생성
-fig, ax1 = plt.subplots(figsize=(10, 5))
+    #%%
+    #%%
+    #%%
+    #%%
+    #%%
+    df.to_csv('./result.csv')
 
-# 첫 번째 y축 - Latency
-ax1.plot(df.index + 1, perf_list, label='Latency', color='blue')
-ax1.set_xlabel('Time (Hour)')
-ax1.set_ylabel('Latency', color='blue')
-ax1.tick_params(axis='y', labelcolor='blue')
+    # Plotting each column
+    plt.figure(figsize=(10, 6))
 
-# 두 번째 y축 - Accuracy
-ax2 = ax1.twinx()  # 두 번째 y축 생성
-ax2.plot(df.index + 1, df['performance'], label='Accuracy', color='orange')
-ax2.set_ylabel('Accuracy', color='orange')
-ax2.tick_params(axis='y', labelcolor='orange')
+    # Adding labels, legend, and title
+    plt.xlabel("Index")
+    plt.ylabel("Values")
+    plt.title("Visualization of Different Metrics")
+    plt.legend()
+    plt.grid(True)
 
-# 그래프 제목 설정
-plt.title('Figure of Latency and Accuracy to Time')
-plt.grid()
-plt.legend()
-# 레이아웃 및 저장
-plt.tight_layout()
-plt.savefig('a.png')
-plt.show()
+    # Show the plot
+    plt.show()
 
-plt.figure(figsize=(10, 5))
-# plt.plot(df.index + 1, np.array(tvm_tune) / 60, label='TVM Tune')
-plt.plot(df.index + 1, np.array(time_train_time) / 60, label='Training')
-plt.plot(df.index + 1, np.array(max_time) / 60, label='Each Tune Time')
-plt.xlabel('Trials')
-plt.ylabel('Time (min)')
-plt.title('Figure of Each Tuning Time')
-plt.grid()
-plt.legend()
-plt.tight_layout()
-plt.savefig('b.png')
-plt.show()
+    # %%
+    df = pd.DataFrame(pick)
+    df = df.drop(columns=['masks'])
+    time_conv = np.vectorize(lambda x: f'{int(x // 60)}m {int(x) % 60}s')
+    # time_train_time = np.where(1000 > time_train_time, time_train_time, 110)
+    tvm_tune = t- time_train_time
+    # tvm_tune = np.where(10000 > tvm_tune, tvm_tune, 1000)
 
-# %%
-# %%
-# %%a
-# %%
+    max_time = np.where(time_train_time > tvm_tune, time_train_time, tvm_tune) + 6
+
+
+    # tvm_tune = np.where(10000 > tvm_tune, tvm_tune, 1000)
+    # max_time = np.where(4000 > max_time, max_time + (40*60), max_time)
+    # max_time = np.where(10000 > max_time, max_time, min(max_time) + 50*60)
+
+    df['time'] = time_conv(max_time)
+    df['train'] = time_conv(time_train_time)
+    df['tvm_tune'] = time_conv(tvm_tune)
+
+    # weight_mask = df.iloc[16]['masks']['weight_mask'] #
+    # num_ones = torch.sum(weight_mask == 1).item()
+
+    # total_elements = weight_mask.numel()
+    print(df.to_csv())
+    #%%
+    #%%
+    import matplotlib.pyplot as plt
+    time_index = np.array(t[:99]).cumsum() / 3600
+    plt.style.use('default')
+    # Figure와 첫 번째 y축 생성
+    fig, ax1 = plt.subplots(figsize=(10, 5))
+
+    # 첫 번째 y축 - Latency
+    ax1.plot(df.index + 1, perf_list, label='Latency', color='blue')
+    ax1.set_xlabel('Time (Hour)')
+    ax1.set_ylabel('Latency', color='blue')
+    ax1.tick_params(axis='y', labelcolor='blue')
+
+    # 두 번째 y축 - Accuracy
+    ax2 = ax1.twinx()  # 두 번째 y축 생성
+    ax2.plot(df.index + 1, df['performance'], label='Accuracy', color='orange')
+    ax2.set_ylabel('Accuracy', color='orange')
+    ax2.tick_params(axis='y', labelcolor='orange')
+
+    # 그래프 제목 설정
+    plt.title('Figure of Latency and Accuracy to Time')
+    plt.grid()
+    plt.legend()
+    # 레이아웃 및 저장
+    plt.tight_layout()
+    plt.savefig('a.png')
+    plt.show()
+
+    plt.figure(figsize=(10, 5))
+    # plt.plot(df.index + 1, np.array(tvm_tune) / 60, label='TVM Tune')
+    plt.plot(df.index + 1, np.array(time_train_time) / 60, label='Training')
+    plt.plot(df.index + 1, np.array(max_time) / 60, label='Each Tune Time')
+    plt.xlabel('Trials')
+    plt.ylabel('Time (min)')
+    plt.title('Figure of Each Tuning Time')
+    plt.grid()
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('b.png')
+    plt.show()
+
+    # %%
+    # %%
+    # %%a
+    # %%

@@ -4,7 +4,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import copy
 import torch
-
+import math
 from nni.compression.pytorch.compressor import Pruner
 from nni.algorithms.compression.pytorch.pruning.constants_pruner import PRUNER_DICT
 from nni.compression.pytorch.utils.shape_dependency import ChannelDependency, GroupDependency, ReshapeDependency, InputChannelDependency, AttentionWeightDependency
@@ -252,7 +252,7 @@ class CPruner(Pruner):
         return 
     
     def __pruning_layer(self, cnt, task_times, task_times_rank, pruning_times, subgraph_tasks, conv2d_subgraph_chs, PruneNum, model,
-                        output_mask, output_model, Pos):
+                        output_mask, output_model, Pos, min_pruning_ratio = 0):
         init_cnt = cnt
         overlap_num = 1
         while True:
@@ -283,7 +283,13 @@ class CPruner(Pruner):
         
         for overlap_cnt in target_index:
             # pruning_times[overlap_cnt] += float(PruneNum[subgraph_tasks[overlap_cnt]]) * float(1/conv2d_subgraph_chs[overlap_cnt])
-            pruning_times[overlap_cnt] += float(lcm_num)*float(1.0/lcm_chs)
+            prune = float(lcm_num)*float(1.0/lcm_chs)
+            if min_pruning_ratio <= 0:
+                pruning_times[overlap_cnt] += prune
+            else:
+                # minimu_pruning_ratio = 0.1
+                min_ratio = math.ceil(min_pruning_ratio / prune)
+                pruning_times[overlap_cnt] += prune * min_ratio
         target_op_sparsity = pruning_times[task_times_rank[init_cnt]]
         ch_num = int(conv2d_subgraph_chs[task_times_rank[init_cnt]] * (1 - target_op_sparsity))
         
@@ -314,7 +320,7 @@ class CPruner(Pruner):
         
         return cnt, pruner, ch_num, wrapper, target_op_sparsity, overlap_num, model_masked, target_index
 
-    def compress(self, tune_mode, short_num=5, early_stop=50):
+    def compress(self, tune_mode, short_num=5, early_stop=50, min_pruning_ratio = 0):
         """
         Compress the model.
 
@@ -458,7 +464,8 @@ class CPruner(Pruner):
                                             model_to_Prune,
                                             output_mask,
                                             output_model,
-                                            subgraph.Pos)
+                                            subgraph.Pos,
+                                            min_pruning_ratio)
                     if pruner == None:
                         continue
                     

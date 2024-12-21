@@ -9,6 +9,12 @@ import time
 import pickle
 import gc
 
+torch.cuda.set_device(1)
+print(torch.cuda.device_count())
+print('Current cuda device:', torch.cuda.current_device())  # 출력결과: 2 (GPU #2 의미)
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#%%
+
 torch.manual_seed(42)
 
 def lazy_load():
