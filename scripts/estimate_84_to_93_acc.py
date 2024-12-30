@@ -16,7 +16,7 @@ from utils import train, test_top1, get_data_dataset
 from nni.compression.pytorch import ModelSpeedup
 from resnet import ResNet18
 
-torch.cuda.set_device(1)
+torch.cuda.set_device(0)
 def generate_random_string(length=16):
     characters = string.ascii_letters + string.digits
     random_string = ''.join(random.choices(characters, k=length))
@@ -25,11 +25,13 @@ def generate_random_string(length=16):
 train_loader, val_loader, criterion = get_data_dataset('cifar10', '/work/dataset', 512, 512)
 
 def short_term_trainer(model, optimizer, epochs=5):
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     args = SimpleNamespace(log_interval=1000)
     for e in range(epochs):
         train(args, model, device, train_loader, criterion, optimizer, e)
+        scheduler.step()
     model = model.to(torch.device('cpu'))
     
 def evaluator_top1(model):
@@ -125,16 +127,85 @@ def accuracy_convert(dir, export, base_pth = 'cifar10_resnet18_94.7.pth'):
         origin_model.load_state_dict(torch.load(os.path.join(project, f'{index:04}_model.pth')))
         with open(os.path.join(project, 'result.txt'), 'at+') as f:
             f.write(f'{index:04},{acc}\n')
+# def last_train(export):
+def long_train_result(dir, export, base_pth = 'cifar10_resnet18_94.7.pth'):
+    project = export
+
+    if not os.path.exists(project):
+        os.mkdir(project)
+    # project = 'manytime_rockpi_resnet18_error_inf'
+    # dir = '/work/experiments/manytime_rockpi_resnet18_error_inf'
+    max_it = _get_latest_iter(dir)
+    epoch = [_get_last_epoch(dir, value) for value in range(max_it)]
+    epoch = [convert(dir, f) for f in epoch][-1]
+
+    predict_acc = [(0.9475, 0.9475)]
+    model = ResNet18().to('cpu')
+    model.load_state_dict(torch.load(base_pth, map_location='cpu')['net'])
+
+    origin_model = copy.deepcopy(model)
+    dummy_input = torch.randn([1,3,32,32])
+
+    index = 9999
+    print()
+    pruner = PRUNER_DICT['l1'](copy.deepcopy(origin_model), epoch, dependency_aware=True, dummy_input=dummy_input)
+    model_masked = pruner.compress()
+    pruner.export_model(os.path.join(project, f'tmp.pth'), 
+                        os.path.join(project, f'{index:04}_mask.pth'))
+
+    optimizer = torch.optim.SGD(model_masked.parameters(), lr=0.0001, momentum=0.9, weight_decay=5e-4)
+    # optimizer = torch.optim.SGD(model_masked.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    
+    none_acc = evaluator_top1(model_masked)
+    short_term_trainer(model_masked, optimizer, epochs=100)
+    acc = evaluator_top1(model_masked)
+    predict_acc.append(none_acc)
+    predict_acc.append(acc)
+    
+    pruner.export_model(os.path.join(project, f'{index:04}_model.pth'), 
+                        os.path.join(project, f'tmp.pth'))
+    # m_speedup = ModelSpeedup(origin_model, dummy_input, os.path.join(project, f'{index:04}_mask.pth'), torch.device('cpu'))
+
+    origin_model.load_state_dict(torch.load(os.path.join(project, f'{index:04}_model.pth')))
+    with open(os.path.join(project, 'result.txt'), 'at+') as f:
+        f.write(f'{index:04},{acc}\n')
+
+
 #%%
-file_list = [#'manytime_rockpi_resnet18_all_none',
-             #'manytime_rockpi_resnet18_error_early300', 
-             #'manytime_rockpi_resnet18_error_inf',
-             #'manytime_sd865_resnet18_all_earlystop_50',
-             #'manytime_sd865_resnet18_all_none',
-            #  'manytime_sd865-1_resnet18_error_early300',
+origin_model = ResNet18()
+origin_model.load_state_dict(torch.load('./taeho_model.pth'))
+dummy_input = torch.randn([1,3,32,32])
+
+m_speedup = ModelSpeedup(origin_model, dummy_input, os.path.join('./', f'taeho_mask.pth'), torch.device('cpu'))
+
+#%%
+file_list = ['manytime_rockpi_resnet18_all_none',
+             'manytime_rockpi_resnet18_error_early300', 
+             'manytime_rockpi_resnet18_error_inf',
+             'manytime_sd865_resnet18_all_earlystop_50',
+             'manytime_sd865_resnet18_all_none',
+             'manytime_sd865-1_resnet18_error_early300',
              'manytime_sd865-3_resnet18_error_early10000000.0']
 
-for item in file_list:
-    accuracy_convert(f'/work/experiments/{item}',
-                     f'./{item}')
+export_list = [
+    '04_rockpi_earlyinf_all_accuracy',
+    '05_rockpi_early300_error_accuracy',
+    '06_rockpi_earlyinf_error_accuracy',
+    '03_sd865_early50_all_accuracy',
+    '00_sd865_earlyinf_all_accuracy',
+    '02_sd865_early300_error_accuracy',
+    '01_sd865_earlyinf_error_accuracy',
+]
+
+for file, export in zip(file_list, export_list):
+    print(file, export)
+    long_train_result(f'/work/experiments/{file}',
+                     f'/work/data_ftp/실험 자료/정제/{export}')
+    
+
+# %%
+
+# %%
+# %%
+
 # %%

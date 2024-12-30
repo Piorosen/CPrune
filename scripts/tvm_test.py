@@ -14,6 +14,8 @@ from nni.algorithms.compression.pytorch.pruning.constants_pruner import PRUNER_D
 from nni.compression.pytorch.speedup import ModelSpeedup
 from nni.compression.pytorch.utils.counter import count_flops_params
 from nni.compression.pytorch.utils.shape_dependency import ChannelDependency, GroupDependency, ReshapeDependency, InputChannelDependency, AttentionWeightDependency
+import random
+import string
 
 def diff(a:str, b:str):
     # 두 텍스트를 줄 단위로 나눕니다.
@@ -38,9 +40,8 @@ def export_compute_dag_from_tasks(log_file, task):
     return task.print_best(log_file, print_mode='schedule')
 
 
-def torch_to_tvm(model):
-    dummy_input = torch.rand(1, 3, 32, 32)
-    input_shape = [1,3,32,32]
+def torch_to_tvm(model, input_shape=[1,3,32,32]):
+    dummy_input = torch.rand(input_shape)
     scripted_model = torch.jit.trace(model, dummy_input).eval()
     input_name = "input0"
     shape_list = [(input_name, input_shape)]
@@ -87,23 +88,30 @@ def load_mode(pth: str = './cifar10_model_300.pth'):
     model.eval()
     return model
 
+def generate_random_string(length=16):
+    characters = string.ascii_letters + string.digits
+    random_string = ''.join(random.choices(characters, k=length))
+    return random_string
 def prune_model(model, config_list, dependency_aware:bool = True):
+    m = copy.deepcopy(model)
     if config_list == []:
-        return copy.deepcopy(model)
+        return m
     
     device = torch.device("cpu")
     input_shape = [1,3,32,32]
     dummy_input = torch.randn(input_shape)
-    pruner = PRUNER_DICT['l1'](copy.deepcopy(model), config_list=config_list, dependency_aware=dependency_aware, dummy_input=dummy_input)
+    pruner = PRUNER_DICT['l1'](copy.deepcopy(m), config_list=config_list, dependency_aware=dependency_aware, dummy_input=dummy_input)
     prunemodel = pruner.compress()
-    pruner.export_model('model.pth', 'mask.pth')
-    model.load_state_dict(torch.load('model.pth'))
-    m_speedup = ModelSpeedup(model, dummy_input, 'mask.pth', device)
+    model_pth = generate_random_string() + '.pth'
+    mask_pth = generate_random_string() + '.pth'
+    pruner.export_model(model_pth, mask_pth)
+    m.load_state_dict(torch.load(model_pth))
+    m_speedup = ModelSpeedup(m, dummy_input, mask_pth, device)
     m_speedup.speedup_model()
-    model.eval()
-    os.remove('model.pth')
-    os.remove('mask.pth')
-    return model
+    m.eval()
+    os.remove(model_pth)
+    os.remove(mask_pth)
+    return m
 
 def export_onnx(model, file_name = 'resnet18_prune.onnx'):
     dummy_input = torch.randn((1,3,32,32))

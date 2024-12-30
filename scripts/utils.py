@@ -76,6 +76,7 @@ def get_data_dataset(dataset, data_dir, batch_size, test_batch_size):
 
 def train(args, model, device, train_loader, criterion, optimizer, epoch, callback=None):
     model.train()
+    
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()

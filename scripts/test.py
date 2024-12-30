@@ -1,103 +1,236 @@
 #%%
-# from nnia.compression.pytorch import ModelSpeedup
+from nni.compression.pytorch import ModelSpeedup
 import os
 import torchvision as tv
-from nnia.algorithms.compression.pytorch.pruning.constants_pruner import PRUNER_DICT
+from nni.algorithms.compression.pytorch.pruning.constants_pruner import PRUNER_DICT
 import copy
 import torch
-from nnia.compression.pytorch.utils.counter import count_flops_params
-from models.implements.cnn.mnist.lenet import LeNet 
-checkpoint_dir = os.path.join(os.getenv("TORCH_HOME"), 'hub', 'checkpoints')
-model_dict = {
-    "alexnet": [tv.models.alexnet, os.path.join(checkpoint_dir, 'alexnet-owt-4df8aa71.pth')],
-    "densenet121": [tv.models.densenet121, os.path.join(checkpoint_dir, 'densenet121-a639ec97.pth')],
-    "densenet161": [tv.models.densenet161, os.path.join(checkpoint_dir, 'densenet161-8d451a50.pth')],
-    "densenet201": [tv.models.densenet201, os.path.join(checkpoint_dir, 'densenet201-c1103571.pth')],
-    "googlenet": [tv.models.googlenet, os.path.join(checkpoint_dir, 'googlenet-1378be20.pth')],
-    "inception_v3": [tv.models.inception_v3, os.path.join(checkpoint_dir, 'inception_v3_google-1a9a5a14.pth')],
-    "mobilenet_v2": [tv.models.mobilenet_v2, os.path.join(checkpoint_dir, 'mobilenet_v2-b0353104.pth')],
-    "resnet18": [tv.models.resnet18, os.path.join(checkpoint_dir, 'resnet18-5c106cde.pth')],
-}
-# config_list = [{'sparsity': 0.0625, 'op_types': ['Conv2d','bias'], 'op_names': ['layer4.1.conv2']}, {'sparsity': 0.0625, 'op_types': ['Conv2d','bias'], 'op_names': ['layer4.0.conv2']}]
-# config_list = [{'sparsity': 0.125, 'op_types': ['Conv2d','ReLU','BatchNorm2d'], 'op_names': ['layer4.1.conv2','layer4.1.relu','layer4.1.bn']}, 
-#                {'sparsity': 0.125, 'op_types': ['Conv2d','ReLU','BatchNorm2d'], 'op_names': ['layer4.0.conv2']},
-#                ]
-config_list = [
-    {
-        "op_types": [
-            "Conv2d"
-        ],
-        "op_names": [
-            "layer3.1.conv2"
-        ],
-        "total_sparsity": 0.2866829931972791
-    },
-    {
-        "op_types": [
-            "Conv2d"
-        ],
-        "op_names": [
-            "layer4.0.conv1"
-        ],
-        "total_sparsity": 0.2818956307355158
-    },
-    {
-        "op_types": [
-            "Conv2d"
-        ],
-        "op_names": [
-            "layer4.0.conv2"
-        ],
-        "total_sparsity": 0.2774719898570899
-    },
-    {
-        "op_types": [
-            "Conv2d"
-        ],
-        "op_names": [
-            "layer4.0.shortcut.0"
-        ],
-        "total_sparsity": 0.7802925030381763
-    },
-    {
-        "op_types": [
-            "Conv2d"
-        ],
-        "op_names": [
-            "layer4.1.conv1"
-        ],
-        "total_sparsity": 0.2822888432580426
-    },
-    {
-        "op_types": [
-            "Conv2d"
-        ],
-        "op_names": [
-            "layer4.1.conv2"
-        ],
-        "total_sparsity": 0.2822888432580426
-    }
-]
-
-# [
-#         #         {'total_sparsity': 0.75, 'op_types': ['Conv2d'], 'op_names': ['layer4.1.conv2']}, 
-#         #         {'total_sparsity': 0.75, 'op_types': ['Conv2d'], 'op_names': ['layer4.0.conv2']}, 
-#         # #        {'sparsity': 0.5, 'op_types': ['Conv2d'], 'op_names': ['layer4.0.conv2']},
-#         #        {'sparsity': 0.125, 'op_types': ['Conv2d']}
-#                ]
+from nni.compression.pytorch.utils.counter import count_flops_params
 
 #%%
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend')))
+from models.implements.cnn.cifar10.resnet import ResNet18
+
+checkpoint_dir = os.path.join(os.getenv("TORCH_HOME"), 'hub', 'checkpoints')
+
+config_list = [
+    {"op_types": [
+            "Conv2d"
+        ], "op_names": [
+            "layer4.1.conv1"
+        ],
+        "sparsity": 0.2822888432580426},
+    # {'sparsity': 0.703125, 'op_types': ['Conv2d'], 'op_names': ['layer4.1.conv2']}, 
+    # {'sparsity': 0.703125, 'op_types': ['Conv2d'], 'op_names': ['layer4.0.conv2']}, 
+    # {'sparsity': 0.15625*4, 'op_types': ['Conv2d'], 'op_names': ['layer1.0.conv2']}, 
+    # {'sparsity': 0.15625*4, 'op_types': ['Conv2d'], 'op_names': ['layer1.1.conv2']}
+    ]
+
+# config_list = [
+#     {
+#         "op_types": [
+#             "Conv2d"
+#         ],
+#         "op_names": [
+#             "layer3.1.conv2"
+#         ],
+#         "sparsity": 0.2866829931972791
+#     },
+#     {
+#         "op_types": [
+#             "Conv2d"
+#         ],
+#         "op_names": [
+#             "layer4.0.conv1"
+#         ],
+#         "sparsity": 0.2818956307355158
+#     },
+#     {
+#         "op_types": [
+#             "Conv2d"
+#         ],
+#         "op_names": [
+#             "layer4.0.conv2"
+#         ],
+#         "sparsity": 0.2774719898570899
+#     },
+#     {
+#         "op_types": [
+#             "Conv2d"
+#         ],
+#         "op_names": [
+#             "layer4.1.conv1"
+#         ],
+#         "sparsity": 0.2822888432580426
+#     },
+#     {
+#         "op_types": [
+#             "Conv2d"
+#         ],
+#         "op_names": [
+#             "layer4.1.conv2"
+#         ],
+#         "sparsity": 0.2822888432580426
+#     }
+# ]
+#%%
 # nni.algorithms.compression.pytorch.pruning
-from nni.algorithms.compression.v2.pytorch.pruning import L2NormPruner
+from nni.algorithms.compression.pytorch.pruning.constants_pruner import PRUNER_DICT
 from nni.compression.pytorch.speedup import ModelSpeedup
 
-dummy_input = torch.randn((1,3,224,224))
+dummy_input = torch.randn((1,3,32,32))
 
 device = torch.device('cpu')
-model, pth = model_dict['resnet18']
-model = model(True,True).to(device).eval()
-pruner = L2NormPruner(model=model, config_list=config_list, mode='dependency_aware', dummy_input=torch.rand(10, 3, 224, 224).to(device))
-compact_model, pruner_generated_masks = pruner.compress()
+model = ResNet18()
+model.load_state_dict(torch.load('/work/scripts/experiments/cifar10_model_300.pth'))
+model = model.to(device).eval()
+
+pruner = PRUNER_DICT['l1'](copy.deepcopy(model), config_list=target_config_list, dependency_aware=True, dummy_input=torch.rand(1, 3, 32, 32).to(device))
+prunemodel = pruner.compress()
+pruner.export_model('model.pth', 'mask.pth')
+model.load_state_dict(torch.load('model.pth'))
+m_speedup = ModelSpeedup(model, dummy_input, 'mask.pth', device)
+m_speedup.speedup_model()
+model.eval()
+#%%
+os.remove('model.pth')
+os.remove('mask.pth')
+#%%
+model
+#%%
+from tvm import relay, auto_scheduler
+import tvm
+from tvm.contrib import utils, ndk, graph_runtime as runtime
+from tvm.contrib import graph_executor
+
+device = torch.device('cpu')
+model = ResNet18()
+model.load_state_dict(torch.load('/work/scripts/experiments/cifar10_model_300.pth'))
+model = model.to(device).eval()
+
+input_shape = [1,3,32,32]
+# dummy_input2 = torch.randn(input_shape)
+scripted_model = torch.jit.trace(model, dummy_input).eval()
+input_name = "input0"
+shape_list = [(input_name, input_shape)]
+mod, params = relay.frontend.from_pytorch(scripted_model, shape_list)
+
+desired_layouts = {'nn.conv2d': ['NHWC', 'default'], 'nn.dense': ['NHWC', 'default']}
+seq = tvm.transform.Sequential([relay.transform.RemoveUnusedFunctions(),
+                                relay.transform.ConvertLayout(desired_layouts),
+                                relay.transform.InferType(),
+                                relay.transform.FoldConstant(),
+                                relay.transform.DeadCodeElimination()])
+with tvm.transform.PassContext(opt_level=3):
+    mod = seq(mod)
+    
+t = mod['main'].astext(show_meta_data=False)
+
+#%%
+device = torch.device('cpu')
+model = ResNet18()
+model.load_state_dict(torch.load('/work/scripts/experiments/cifar10_model_300.pth'))
+model = model.to(device).eval()
+
+pruner = PRUNER_DICT['l1'](copy.deepcopy(model), config_list=config_list, dependency_aware=True, dummy_input=torch.rand(1, 3, 32, 32).to(device))
+prunemodel = pruner.compress()
+pruner.export_model('model.pth', 'mask.pth')
+model.load_state_dict(torch.load('model.pth'))
+m_speedup = ModelSpeedup(model, dummy_input, 'mask.pth', device)
+m_speedup.speedup_model()
+model.eval()
+os.remove('model.pth')
+os.remove('mask.pth')
+input_shape = [1,3,32,32]
+# dummy_input2 = torch.randn(input_shape)
+scripted_model = torch.jit.trace(model, dummy_input).eval()
+input_name = "input0"
+shape_list = [(input_name, input_shape)]
+mod, params = relay.frontend.from_pytorch(scripted_model, shape_list)
+
+desired_layouts = {'nn.conv2d': ['NHWC', 'default'], 'nn.dense': ['NHWC', 'default']}
+seq = tvm.transform.Sequential([relay.transform.RemoveUnusedFunctions(),
+                                relay.transform.ConvertLayout(desired_layouts),
+                                relay.transform.InferType(),
+                                relay.transform.FoldConstant(),
+                                relay.transform.DeadCodeElimination()])
+with tvm.transform.PassContext(opt_level=3):
+    mod = seq(mod)
+t2 = mod['main'].astext(show_meta_data=False)
+#%%
+
+d = tv.models.resnet18(pretrained=False)
+print(count_flops_params(d, tuple(input_shape)))
+
+#%%
+print(t == t2)
+#%%
+import difflib
+
+# 두 텍스트를 줄 단위로 나눕니다.
+text1_lines = t.splitlines()
+text2_lines = t2.splitlines()
+
+# Differ 객체를 생성하여 차이점을 계산합니다.
+d = difflib.Differ()
+diff = d.compare(text1_lines, text2_lines)
+
+# 결과를 출력합니다.
+print('\n'.join(diff))
+
+#%%
+
+# 1. Speed UP 
+# 2. TIR / Relay IR Lower Compare
+# 3. 
+tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, 'llvm -mtriple=aarch64-linux-none')
+
+#%%
+build_mod = relay.build_module.BuildModule()
+
+with auto_scheduler.ApplyHistoryBest('long_cifar_rock.log'):
+    with tvm.transform.PassContext(opt_level=3, config={"relay.backend.use_auto_scheduler": True}):
+        lib = build_mod.build(mod, params=params, target='llvm -mtriple=aarch64-linux-none')
+#%%
+# print(lib.ir_mod.astext)
+# print(lib.get_graph_json())
+# print(build_mod.get_function_metadata())
+# print(build_mod.get_module())
+sch, args = tasks[5].apply_best('long_cifar_rock.log')
+tir_module = tvm.lower(sch, args, simple_mode=True)
+print(tir_module)
+
+#%%
+mod
+#%%
+
+
+import torch.onnx
+dummy_input = torch.randn((1,3,32,32))
+torch.onnx.export(model,         # model being run 
+        dummy_input,       # model input (or a tuple for multiple inputs) 
+        "resnet18_pr2une.onnx",       # where to save the model  
+        export_params=True,  # store the trained parameter weights inside the model file 
+        opset_version=12,    # the ONNX version to export the model to 
+        do_constant_folding=True,  # whether to execute constant folding for optimization 
+        input_names = ['input0'],   # the model's input names 
+        output_names = ['output0'], # the model's output names 
+        ) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+#%%
 pruner.show_pruned_weights()
 pruner._unwrap_model()
 ModelSpeedup(compact_model, dummy_input, pruner_generated_masks).speedup_model()
@@ -196,3 +329,5 @@ torch.onnx.export(model,         # model being run
 # %%
 
 
+from tvm.relay import backend
+backend.lower
